@@ -26,9 +26,11 @@ interface AuthActions {
     dateOfBirth: string;
     password: string;
     confirmPassword: string;
+    email: string;
+    gender?: string;
   }) => Promise<{ success: boolean; message: string }>;
   signIn: (data: { phone: string; password: string }) => Promise<{ success: boolean; message: string }>;
-  verifyPhone: (data: { phone: string; verificationCode: string }) => Promise<{ success: boolean; message: string }>;
+  verifyEmail: (data: { email: string; verificationCode: string }) => Promise<{ success: boolean; message: string }>;
   resendVerification: (phone: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   clearError: () => void;
@@ -108,11 +110,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     }
   },
 
-  verifyPhone: async (data) => {
+  verifyEmail: async (data: { email: string; verificationCode: string }) => {
     set({ isLoading: true, error: null });
     
     try {
-      const response: AuthResponse = await authApi.verifyPhone(data);
+      const response: AuthResponse = await authApi.verifyEmail(data);
       
       if (response.success && response.data?.user) {
         set({
@@ -125,12 +127,12 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       } else {
         set({ 
           isLoading: false, 
-          error: response.message || 'Phone verification failed' 
+          error: response.message || 'Email verification failed' 
         });
-        return { success: false, message: response.message || 'Phone verification failed' };
+        return { success: false, message: response.message || 'Email verification failed' };
       }
     } catch (error) {
-      console.error('Phone verification error:', error);
+      console.error('Email verification error:', error);
       set({ 
         isLoading: false, 
         error: 'Network error. Please try again.' 
@@ -139,11 +141,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     }
   },
 
-  resendVerification: async (phone) => {
+  resendVerification: async (email: string) => {
     set({ isLoading: true, error: null });
     
     try {
-      const response: AuthResponse = await authApi.resendVerification(phone);
+      const response: AuthResponse = await authApi.resendVerification(email);
       
       set({ isLoading: false, error: null });
       return { success: response.success, message: response.message };

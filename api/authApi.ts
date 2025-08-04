@@ -7,6 +7,8 @@ export interface RegisterRequest {
   dateOfBirth: string;
   password: string;
   confirmPassword: string;
+  email: string;
+  gender?: string;
 }
 
 export interface SignInRequest {
@@ -14,8 +16,8 @@ export interface SignInRequest {
   password: string;
 }
 
-export interface VerifyPhoneRequest {
-  phone: string;
+export interface VerifyEmailRequest {
+  email: string;
   verificationCode: string;
 }
 
@@ -82,9 +84,9 @@ class AuthApi {
     }
   }
 
-  async verifyPhone(data: VerifyPhoneRequest): Promise<AuthResponse> {
+  async verifyEmail(data: VerifyEmailRequest): Promise<AuthResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/verify-phone`, {
+      const response = await fetch(`${this.baseUrl}/verify-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,10 +95,10 @@ class AuthApi {
       });
 
       const result = await response.json();
-      console.log('Phone verification response:', result);
+      console.log('Email verification response:', result);
       return result;
     } catch (error) {
-      console.error('Phone verification error:', error);
+      console.error('Email verification error:', error);
       throw error;
     }
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Alert, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -18,15 +18,29 @@ import {
   X,
   Check
 } from 'lucide-react-native';
-import { sampleFamilies, getFamilyMemberByJoinId, getFamilyByMemberJoinId, generateJoinId } from '../../constants/familyData';
+import { useAuthStore } from '../../store/authStore';
+import { useFamilyStore } from '../../store/familyStore';
 
 const { width } = Dimensions.get('window');
 
-const statsData = [
-  { icon: Users, label: 'Family Members', value: '6', color: '#2563eb' },
-  { icon: TrendingUp, label: 'Linked Families', value: '0', color: '#059669' },
-  { icon: Shield, label: 'Verified', value: '4', color: '#ea580c' },
-];
+// Dynamic stats based on family data
+const getStatsData = (family: any) => {
+  if (!family) {
+    return [
+      { icon: Users, label: 'Family Members', value: '0', color: '#2563eb' },
+      { icon: TrendingUp, label: 'Linked Families', value: '0', color: '#059669' },
+      { icon: Shield, label: 'Verified', value: '0', color: '#ea580c' },
+    ];
+  }
+
+  const verifiedCount = family.members.filter((member: any) => member.isVerified).length;
+  
+  return [
+    { icon: Users, label: 'Family Members', value: family.members.length.toString(), color: '#2563eb' },
+    { icon: TrendingUp, label: 'Linked Families', value: (family.linkedFamilies?.length || 0).toString(), color: '#059669' },
+    { icon: Shield, label: 'Verified', value: verifiedCount.toString(), color: '#ea580c' },
+  ];
+};
 
 const recentActivity = [
   {
@@ -48,49 +62,48 @@ const recentActivity = [
 ];
 
 export default function Home() {
+  const { user, accessToken } = useAuthStore();
+  const { family, getMyFamily, linkFamily, isLoading } = useFamilyStore();
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkageId, setLinkageId] = useState('');
 
-  const handleLinkFamily = () => {
+  // Load family data on component mount
+  useEffect(() => {
+    if (accessToken) {
+      getMyFamily(accessToken);
+    }
+  }, [accessToken]);
+
+  const handleLinkFamily = async () => {
     if (!linkageId.trim()) {
       Alert.alert('Error', 'Please enter a Join ID');
       return;
     }
 
-    // Check if the linkage ID exists
-    const targetMember = getFamilyMemberByJoinId(sampleFamilies, linkageId);
-    if (!targetMember) {
-      Alert.alert('Error', 'Invalid Join ID. Please check and try again.');
+    if (!accessToken) {
+      Alert.alert('Error', 'You must be logged in to link families');
       return;
     }
 
-    // Get the target family
-    const targetFamily = getFamilyByMemberJoinId(sampleFamilies, linkageId);
-    if (!targetFamily) {
-      Alert.alert('Error', 'Family not found. Please check the Join ID and try again.');
-      return;
-    }
-
-    // Check if this is the family creator (the one who created their family)
-    if (!targetMember.isFamilyCreator) {
-      Alert.alert('Error', 'This Join ID must belong to the person who created their family tree. Only family creators can link their families.');
-      return;
-    }
-
-    // In real app, this would make an API call to link families
-    Alert.alert(
-      'Family Linked Successfully!',
-      `Your family has been linked with ${targetMember.name}'s family tree. You can now see their family members and they can see yours. All descendants will have access to the complete family network.`,
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            setShowLinkModal(false);
-            setLinkageId('');
+    const result = await linkFamily(linkageId, accessToken);
+    
+    if (result.success) {
+      Alert.alert(
+        'Family Linked Successfully!',
+        result.message,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setShowLinkModal(false);
+              setLinkageId('');
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    } else {
+      Alert.alert('Link Failed', result.message);
+    }
   };
 
 
@@ -100,7 +113,9 @@ export default function Home() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.userName}>Fatima Yusuf</Text>
+            <Text style={styles.userName}>
+              {user ? `${user.firstName} ${user.lastName}` : 'User'}
+            </Text>
           </View>
           <Pressable style={styles.notificationButton} onPress={() => router.push('/(tabs)/notifications')}>
             <Bell size={24} color="#64748b" strokeWidth={2} />
@@ -111,7 +126,7 @@ export default function Home() {
         </View>
 
         <View style={styles.statsContainer}>
-          {statsData.map((stat, index) => (
+          {getStatsData(family).map((stat: any, index: number) => (
             <View key={index} style={styles.statCard}>
               <View style={[styles.statIcon, { backgroundColor: `${stat.color}15` }]}>
                 <stat.icon size={24} color={stat.color} strokeWidth={2} />
@@ -124,63 +139,86 @@ export default function Home() {
 
 
 
-        <View style={styles.quickActions}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          
-          <View style={styles.actionGrid}>
+        {!family || family.members.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyStateIcon}>
+              <Users size={48} color="#94a3b8" strokeWidth={2} />
+            </View>
+            <Text style={styles.emptyStateTitle}>No Family Data</Text>
+            <Text style={styles.emptyStateMessage}>
+              You haven't added any family members yet. Start by adding yourself and your immediate family to create your family tree.
+            </Text>
             <Pressable 
-              style={[styles.actionCard, { backgroundColor: '#2563eb' }]}
-              onPress={() => setShowLinkModal(true)}
-            >
-              <Link size={32} color="#ffffff" strokeWidth={2} />
-              <Text style={styles.actionCardTitle}>Link Family</Text>
-              <Text style={styles.actionCardSubtitle}>Connect with other family trees</Text>
-            </Pressable>
-
-            <Pressable 
-              style={[styles.actionCard, { backgroundColor: '#059669' }]}
+              style={styles.emptyStateButton}
               onPress={() => router.push('/(tabs)/tree')}
             >
-              <TreePine size={32} color="#ffffff" strokeWidth={2} />
-              <Text style={styles.actionCardTitle}>View Family Tree</Text>
-              <Text style={styles.actionCardSubtitle}>Explore your network</Text>
+              <UserPlus size={20} color="#ffffff" strokeWidth={2} />
+              <Text style={styles.emptyStateButtonText}>Add Family Members</Text>
             </Pressable>
           </View>
-        </View>
+        ) : (
+          <View style={styles.quickActions}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            
+            <View style={styles.actionGrid}>
+              <Pressable 
+                style={[styles.actionCard, { backgroundColor: '#2563eb' }]}
+                onPress={() => setShowLinkModal(true)}
+              >
+                <Link size={32} color="#ffffff" strokeWidth={2} />
+                <Text style={styles.actionCardTitle}>Link Family</Text>
+                <Text style={styles.actionCardSubtitle}>Connect with other family trees</Text>
+              </Pressable>
 
-        <View style={styles.activitySection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <Pressable>
-              <Text style={styles.seeAllText}>See All</Text>
-            </Pressable>
-          </View>
-
-          {recentActivity.map((activity) => (
-            <View key={activity.id} style={styles.activityItem}>
-              <View style={[styles.activityIcon, { backgroundColor: `${activity.color}15` }]}>
-                <activity.icon size={20} color={activity.color} strokeWidth={2} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityMessage}>{activity.message}</Text>
-                <Text style={styles.activityTime}>{activity.time}</Text>
-              </View>
-              <ArrowRight size={16} color="#94a3b8" strokeWidth={2} />
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.upcomingSection}>
-          <Text style={styles.sectionTitle}>Upcoming</Text>
-          <View style={styles.upcomingCard}>
-            <Calendar size={24} color="#ea580c" strokeWidth={2} />
-            <View style={styles.upcomingContent}>
-              <Text style={styles.upcomingTitle}>Family Reunion</Text>
-              <Text style={styles.upcomingDate}>December 25, 2025</Text>
-              <Text style={styles.upcomingMembers}>6 family members invited</Text>
+              <Pressable 
+                style={[styles.actionCard, { backgroundColor: '#059669' }]}
+                onPress={() => router.push('/(tabs)/tree')}
+              >
+                <TreePine size={32} color="#ffffff" strokeWidth={2} />
+                <Text style={styles.actionCardTitle}>View Family Tree</Text>
+                <Text style={styles.actionCardSubtitle}>Explore your network</Text>
+              </Pressable>
             </View>
           </View>
-        </View>
+        )}
+
+        {family && family.members.length > 0 && (
+          <View style={styles.activitySection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <Pressable>
+                <Text style={styles.seeAllText}>See All</Text>
+              </Pressable>
+            </View>
+
+            {recentActivity.map((activity) => (
+              <View key={activity.id} style={styles.activityItem}>
+                <View style={[styles.activityIcon, { backgroundColor: `${activity.color}15` }]}>
+                  <activity.icon size={20} color={activity.color} strokeWidth={2} />
+                </View>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityMessage}>{activity.message}</Text>
+                  <Text style={styles.activityTime}>{activity.time}</Text>
+                </View>
+                <ArrowRight size={16} color="#94a3b8" strokeWidth={2} />
+              </View>
+            ))}
+          </View>
+        )}
+
+        {family && family.members.length > 0 && (
+          <View style={styles.upcomingSection}>
+            <Text style={styles.sectionTitle}>Upcoming</Text>
+            <View style={styles.upcomingCard}>
+              <Calendar size={24} color="#ea580c" strokeWidth={2} />
+              <View style={styles.upcomingContent}>
+                <Text style={styles.upcomingTitle}>Family Reunion</Text>
+                <Text style={styles.upcomingDate}>December 25, 2025</Text>
+                <Text style={styles.upcomingMembers}>{family.members.length} family members invited</Text>
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Link Family Modal */}
@@ -616,6 +654,42 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+    marginLeft: 8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+  },
+  emptyStateIcon: {
+    marginBottom: 16,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateMessage: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  emptyStateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  emptyStateButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
     marginLeft: 8,
   },
 });

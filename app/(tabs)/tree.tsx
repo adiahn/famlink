@@ -7,17 +7,32 @@ import {
   Pressable,
   Dimensions,
   Image,
-  Alert,
+  Animated,
   Modal,
+  Alert,
+  Switch,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
-import { useFamilyStore } from '../../store/familyStore';
 import { useAuthStore } from '../../store/authStore';
-import Card from '../../components/ui/Card';
+import { useFamilyStore } from '../../store/familyStore';
+import { Colors } from '../../constants/Colors';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import { Colors } from '../../constants/Colors';
-import { Plus, ChevronDown, ChevronRight, Camera, X, Save } from 'lucide-react-native';
-// import * as ImagePicker from 'expo-image-picker';
+import Card from '../../components/ui/Card';
+import FamilyTreeView from '../../components/FamilyTreeView';
+import {
+  Plus,
+  ChevronDown,
+  ChevronRight,
+  Heart,
+  Crown,
+  Camera,
+  X,
+  Save,
+  RefreshCw,
+} from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +52,7 @@ interface FamilyNode {
   relationship: string;
   birthYear: string;
   isDeceased: boolean;
+  deathYear?: string;
   isVerified: boolean;
   isFamilyCreator: boolean;
   joinId: string;
@@ -48,9 +64,19 @@ interface FamilyNode {
 }
 
 export default function TreeScreen() {
-  const { family, isLoading, error, selectedMember, getMyFamily, addMember, setSelectedMember } = useFamilyStore();
   const { accessToken } = useAuthStore();
-  
+  const { 
+    family, 
+    isLoading, 
+    error, 
+    selectedMember, 
+    expandedNodes,
+    getMyFamily, 
+    addMember, 
+    setSelectedMember, 
+    toggleExpandedNode 
+  } = useFamilyStore();
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState<AddMemberForm>({
     firstName: '',
@@ -60,58 +86,96 @@ export default function TreeScreen() {
     isDeceased: false,
     deathYear: '',
   });
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (accessToken) {
-      loadFamilyData();
-    }
-  }, [accessToken]);
+    loadFamilyData();
+  }, []);
 
   const loadFamilyData = async () => {
+    console.log('Loading family data...');
+    console.log('Access token:', accessToken ? 'Present' : 'Missing');
     if (accessToken) {
-      await getMyFamily(accessToken);
+      const result = await getMyFamily(accessToken);
+      console.log('Load family result:', result);
     }
   };
 
   const handleAddMember = async () => {
-    if (!family || !accessToken) return;
-
-    // Validate form
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      Alert.alert('Error', 'First name and last name are required');
-      return;
-    }
-    if (!formData.relationship.trim()) {
-      Alert.alert('Error', 'Relationship is required');
-      return;
-    }
-    if (!formData.birthYear.trim()) {
-      Alert.alert('Error', 'Birth year is required');
+    if (!formData.firstName || !formData.lastName || !formData.relationship || !formData.birthYear) {
+      Alert.alert('Missing Information', 'Please fill in all required fields.');
       return;
     }
 
-    const result = await addMember(family.id, {
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      relationship: formData.relationship,
-      birthYear: formData.birthYear,
-      isDeceased: formData.isDeceased,
-      deathYear: formData.deathYear || undefined,
-    }, accessToken);
+    if (!accessToken) {
+      Alert.alert('Authentication Error', 'Please log in again.');
+      return;
+    }
 
+    if (!family) {
+      Alert.alert('Error', 'No family data available.');
+      return;
+    }
+
+    // Parent requirement validation
+    const hasParents = family.members.some(member =>
+      member.relationship.toLowerCase().includes('father') ||
+      member.relationship.toLowerCase().includes('mother') ||
+      member.relationship.toLowerCase().includes('wife')
+    );
+
+    const isAddingParent = formData.relationship.toLowerCase().includes('father') ||
+                          formData.relationship.toLowerCase().includes('mother') ||
+                          formData.relationship.toLowerCase().includes('wife');
+
+    if (!hasParents && !isAddingParent) {
+      Alert.alert(
+        'Parents Required',
+        'You must add at least one parent (Father, Mother, or Wife) before adding other family members. Please add a parent first.',
+        [
+          { text: 'OK', style: 'default' },
+          {
+            text: 'Add Parent Now',
+            onPress: () => {
+              setFormData({
+                ...formData,
+                relationship: 'Father'
+              });
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    // Auto-assign wife number if adding a wife
+    let finalRelationship = formData.relationship;
+    if (formData.relationship.toLowerCase().includes('wife')) {
+      const existingWives = family.members.filter(member =>
+        member.relationship.toLowerCase().includes('wife')
+      );
+      const wifeNumber = existingWives.length + 1;
+      finalRelationship = `Wife${wifeNumber}`;
+    }
+
+    const memberData = {
+      ...formData,
+      relationship: finalRelationship
+    };
+
+    const result = await addMember(family.id, memberData, accessToken);
+    
     if (result.success) {
       setShowAddModal(false);
       resetForm();
-      Alert.alert('Success', 'Family member added successfully');
+      Alert.alert('Success', 'Family member added successfully!');
     } else {
-      Alert.alert('Error', result.message);
+      Alert.alert('Error', result.message || 'Failed to add family member');
     }
   };
 
   const handleTakePicture = async () => {
-    // TODO: Implement image picker when expo-image-picker is available
-    Alert.alert('Image Picker', 'Image picker functionality will be implemented when expo-image-picker is available');
+    // TODO: Implement image picker
+    Alert.alert('Coming Soon', 'Photo upload feature will be available soon!');
   };
 
   const resetForm = () => {
@@ -123,201 +187,12 @@ export default function TreeScreen() {
       isDeceased: false,
       deathYear: '',
     });
-    setSelectedImage(null);
-  };
-
-  const buildFamilyTree = (members: any[]): FamilyNode[] => {
-    const parents: any[] = [];
-    const children: any[] = [];
-    const spouses: any[] = [];
-
-    members.forEach(member => {
-      if (member.relationship === 'Father' || member.relationship === 'Mother') {
-        parents.push(member);
-      } else if (member.relationship === 'Son' || member.relationship === 'Daughter' || member.relationship === 'Brother' || member.relationship === 'Sister') {
-        children.push(member);
-      } else if (member.relationship === 'Wife' || member.relationship === 'Husband') {
-        spouses.push(member);
-      }
-    });
-
-    const tree: FamilyNode[] = [];
-    
-    if (parents.length > 0) {
-      tree.push({
-        id: 'parents-level',
-        name: 'Parents',
-        relationship: 'Parents',
-        birthYear: '', 
-        isDeceased: false, 
-        isVerified: true, 
-        isFamilyCreator: false, 
-        joinId: '', 
-        children: [],
-        parents: parents.map(p => ({ ...p, children: [] }))
-      });
-    }
-
-    const directChildren = children.filter(c => c.familyId === family?.id);
-    if (directChildren.length > 0) {
-      tree.push({
-        id: 'children-level',
-        name: 'Children',
-        relationship: 'Children',
-        birthYear: '', 
-        isDeceased: false, 
-        isVerified: true, 
-        isFamilyCreator: false, 
-        joinId: '', 
-        children: directChildren.map(c => ({ ...c, children: [] }))
-      });
-    }
-    
-    return tree;
-  };
-
-  const getSelectedMemberFamily = () => {
-    if (!selectedMember || !family) return null;
-    
-    const member = family.members.find(m => m.id === selectedMember);
-    if (!member) return null;
-
-    // Find spouse and children for the selected member
-    const spouse = family.members.find(m => 
-      (m.relationship === 'Wife' || m.relationship === 'Husband') && 
-      m.id !== member.id
-    );
-    
-    const children = family.members.filter(m => 
-      m.relationship === 'Son' || m.relationship === 'Daughter'
-    );
-
-    return {
-      spouse: spouse ? { ...spouse, children: [] } : undefined,
-      children: children.map(child => ({ ...child, children: [] }))
-    };
-  };
-
-  const FamilyMemberCard = ({ member, onPress, isSelected }: { 
-    member: FamilyNode; 
-    onPress: () => void; 
-    isSelected: boolean;
-  }) => (
-    <Pressable
-      style={[styles.memberCard, isSelected && styles.selectedCard]}
-      onPress={onPress}
-    >
-      <View style={styles.memberAvatar}>
-        {member.avatar ? (
-          <Image source={{ uri: member.avatar }} style={styles.avatarImage} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>
-              {member.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-            </Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.memberName} numberOfLines={2}>
-        {member.name}
-      </Text>
-      <Text style={styles.memberRelationship}>{member.relationship}</Text>
-      <Text style={styles.memberYears}>
-        {member.birthYear}
-        {member.isDeceased && member.deathYear && ` - ${member.deathYear}`}
-      </Text>
-      {member.isDeceased && (
-        <View style={styles.deceasedBadge}>
-          <Text style={styles.deceasedText}>Deceased</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-
-  const FamilyLevel = ({ title, members }: { title: string; members: FamilyNode[] }) => (
-    <View style={styles.familyLevel}>
-      <Text style={styles.levelTitle}>{title}</Text>
-      <View style={styles.membersRow}>
-        {members.map((member) => (
-          <FamilyMemberCard
-            key={member.id}
-            member={member}
-            onPress={() => setSelectedMember(selectedMember === member.id ? null : member.id)}
-            isSelected={selectedMember === member.id}
-          />
-        ))}
-      </View>
-    </View>
-  );
-
-  const ChildrenLevel = ({ children }: { children: FamilyNode[] }) => (
-    <View style={styles.childrenLevel}>
-      <Text style={styles.levelTitle}>Children</Text>
-      <View style={styles.membersRow}>
-        {children.map((child) => (
-          <FamilyMemberCard
-            key={child.id}
-            member={child}
-            onPress={() => setSelectedMember(selectedMember === child.id ? null : child.id)}
-            isSelected={selectedMember === child.id}
-          />
-        ))}
-      </View>
-    </View>
-  );
-
-  const FamilySection = () => {
-    const selectedMemberFamily = getSelectedMemberFamily();
-    return (
-      <View style={styles.familySection}>
-        <View style={styles.familyDivider}>
-          <Text style={styles.familyDividerText}>Family</Text>
-        </View>
-        {selectedMemberFamily ? (
-          <View style={styles.familyContent}>
-            {selectedMemberFamily.spouse && (
-              <View style={styles.spouseSection}>
-                <Text style={styles.sectionTitle}>Spouse</Text>
-                <FamilyMemberCard
-                  member={{ ...selectedMemberFamily.spouse, children: [] }}
-                  onPress={() => setSelectedMember(selectedMember === selectedMemberFamily.spouse?.id ? null : selectedMemberFamily.spouse?.id || null)}
-                  isSelected={selectedMember === selectedMemberFamily.spouse?.id}
-                />
-              </View>
-            )}
-            {selectedMemberFamily.children.length > 0 && (
-              <View style={styles.childrenSection}>
-                <Text style={styles.sectionTitle}>Children</Text>
-                <View style={styles.membersRow}>
-                  {selectedMemberFamily.children.map((child) => (
-                    <FamilyMemberCard
-                      key={child.id}
-                      member={{ ...child, children: [] }}
-                      onPress={() => setSelectedMember(selectedMember === child.id ? null : child.id)}
-                      isSelected={selectedMember === child.id}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
-            {!selectedMemberFamily.spouse && selectedMemberFamily.children.length === 0 && (
-              <View style={styles.noFamilyData}>
-                <Text style={styles.noFamilyDataText}>No family data found</Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={styles.noFamilyData}>
-            <Text style={styles.noFamilyDataText}>Select a family member to view their family</Text>
-          </View>
-        )}
-      </View>
-    );
   };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Loading family tree...</Text>
       </View>
     );
@@ -327,56 +202,45 @@ export default function TreeScreen() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
-        <Button onPress={loadFamilyData} style={styles.retryButton}>
-          Retry
-        </Button>
+        <Pressable style={styles.retryButton} onPress={loadFamilyData}>
+          <Text style={{ color: Colors.white }}>Retry</Text>
+        </Pressable>
       </View>
     );
   }
 
-  if (!family) {
+  if (!family || !family.members || family.members.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No family data found</Text>
-        <Button onPress={loadFamilyData} style={styles.retryButton}>
-          Load Family
-        </Button>
+        <Text style={styles.emptyText}>No family members found</Text>
+        <Text style={styles.debugText}>Add your first family member to get started</Text>
+        <Pressable style={styles.retryButton} onPress={loadFamilyData}>
+          <Text style={{ color: Colors.white }}>Refresh</Text>
+        </Pressable>
       </View>
     );
   }
-
-  const familyTree = buildFamilyTree(family.members);
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Family Tree</Text>
-          <Button
-            onPress={() => setShowAddModal(true)}
-            style={styles.addButton}
-            textStyle={styles.addButtonText}
-          >
-            <Plus size={20} color={Colors.white} />
-            Add Member
-          </Button>
+      <View style={styles.header}>
+        <Text style={styles.title}>Family Tree</Text>
+        <View style={styles.headerButtons}>
+          <Pressable onPress={loadFamilyData} style={styles.refreshButton}>
+            <RefreshCw size={20} color={Colors.primary} />
+          </Pressable>
+          <Pressable style={styles.addButton} onPress={() => setShowAddModal(true)}>
+            <Plus size={24} color={Colors.white} />
+          </Pressable>
         </View>
+      </View>
 
-        <View style={styles.treeContainer}>
-          {familyTree.map((level) => (
-            <View key={level.id}>
-              {level.parents && level.parents.length > 0 && (
-                <FamilyLevel title="Parents" members={level.parents} />
-              )}
-              {level.children && level.children.length > 0 && (
-                <ChildrenLevel children={level.children} />
-              )}
-            </View>
-          ))}
-        </View>
-
-        <FamilySection />
-      </ScrollView>
+      <View style={styles.content}>
+        <FamilyTreeView 
+          familyMembers={family.members} 
+          onMemberSelect={(memberId) => setSelectedMember(memberId)}
+        />
+      </View>
 
       {/* Add Member Modal */}
       <Modal
@@ -387,109 +251,143 @@ export default function TreeScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Family Member</Text>
-            <Button
-              onPress={() => {
-                setShowAddModal(false);
-                resetForm();
-              }}
-              style={styles.closeButton}
-            >
-              <X size={24} color={Colors.gray} />
-            </Button>
+            <Pressable style={styles.closeButton} onPress={() => setShowAddModal(false)}>
+              <X size={24} color={Colors.text} />
+            </Pressable>
           </View>
 
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.avatarSection}>
-              <Pressable style={styles.avatarButton} onPress={handleTakePicture}>
-                {selectedImage ? (
-                  <Image source={{ uri: selectedImage }} style={styles.selectedAvatar} />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Camera size={24} color={Colors.gray} />
+          <View style={styles.modalContent}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={{ flex: 1 }}
+            >
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Avatar Section */}
+                <View style={styles.avatarSection}>
+                  <Pressable style={styles.avatarButton} onPress={handleTakePicture}>
+                    {formData.avatar ? (
+                      <Image source={{ uri: formData.avatar }} style={styles.selectedAvatar} />
+                    ) : (
+                      <View style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        backgroundColor: Colors.lightGray,
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                      }}>
+                        <Camera size={32} color={Colors.gray} />
+                      </View>
+                    )}
+                  </Pressable>
+                  <Text style={styles.avatarLabel}>Tap to add photo</Text>
+                </View>
+
+                {/* Form Fields */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>First Name *</Text>
+                  <Input
+                    value={formData.firstName}
+                    onChangeText={(text) => setFormData({ ...formData, firstName: text })}
+                    placeholder="Enter first name"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Last Name *</Text>
+                  <Input
+                    value={formData.lastName}
+                    onChangeText={(text) => setFormData({ ...formData, lastName: text })}
+                    placeholder="Enter last name"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Relationship *</Text>
+                  <Input
+                    value={formData.relationship}
+                    onChangeText={(text) => setFormData({ ...formData, relationship: text })}
+                    placeholder="e.g., Father, Mother, Brother, Sister"
+                  />
+                  {family && !family.members.some(member => 
+                    member.relationship.toLowerCase().includes('father') || 
+                    member.relationship.toLowerCase().includes('mother') ||
+                    member.relationship.toLowerCase().includes('wife')
+                  ) && (
+                    <Text style={styles.helperText}>
+                      ⚠️ You must add at least one parent (Father, Mother, or Wife) first
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Birth Year *</Text>
+                  <Input
+                    value={formData.birthYear}
+                    onChangeText={(text) => setFormData({ ...formData, birthYear: text })}
+                    placeholder="e.g., 1990"
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Deceased</Text>
+                  <View style={styles.deceasedContainer}>
+                    <Pressable
+                      style={[
+                        styles.deceasedButton,
+                        !formData.isDeceased && styles.deceasedButtonActive
+                      ]}
+                      onPress={() => setFormData({ ...formData, isDeceased: false })}
+                    >
+                      <Text style={[
+                        styles.deceasedButtonText,
+                        !formData.isDeceased && styles.deceasedButtonTextActive
+                      ]}>
+                        No
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.deceasedButton,
+                        formData.isDeceased && styles.deceasedButtonActive
+                      ]}
+                      onPress={() => setFormData({ ...formData, isDeceased: true })}
+                    >
+                      <Text style={[
+                        styles.deceasedButtonText,
+                        formData.isDeceased && styles.deceasedButtonTextActive
+                      ]}>
+                        Yes
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {formData.isDeceased && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Death Year</Text>
+                    <Input
+                      value={formData.deathYear}
+                      onChangeText={(text) => setFormData({ ...formData, deathYear: text })}
+                      placeholder="e.g., 2020"
+                      keyboardType="numeric"
+                    />
                   </View>
                 )}
-              </Pressable>
-              <Text style={styles.avatarLabel}>Add Photo</Text>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>First Name *</Text>
-              <Input
-                value={formData.firstName}
-                onChangeText={(value) => setFormData({ ...formData, firstName: value })}
-                placeholder="Enter first name"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Last Name *</Text>
-              <Input
-                value={formData.lastName}
-                onChangeText={(value) => setFormData({ ...formData, lastName: value })}
-                placeholder="Enter last name"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Relationship *</Text>
-              <Input
-                value={formData.relationship}
-                onChangeText={(value) => setFormData({ ...formData, relationship: value })}
-                placeholder="e.g., Father, Mother, Son, Daughter"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Birth Year *</Text>
-              <Input
-                value={formData.birthYear}
-                onChangeText={(value) => setFormData({ ...formData, birthYear: value })}
-                placeholder="YYYY"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Deceased</Text>
-              <View style={styles.deceasedContainer}>
-                <Button
-                  onPress={() => setFormData({ ...formData, isDeceased: !formData.isDeceased })}
-                  style={[
-                    styles.deceasedButton,
-                    formData.isDeceased && styles.deceasedButtonActive
-                  ]}
-                  textStyle={[
-                    styles.deceasedButtonText,
-                    formData.isDeceased && styles.deceasedButtonTextActive
-                  ]}
-                >
-                  {formData.isDeceased ? 'Yes' : 'No'}
-                </Button>
-              </View>
-            </View>
-
-            {formData.isDeceased && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Death Year</Text>
-                <Input
-                  value={formData.deathYear}
-                  onChangeText={(value) => setFormData({ ...formData, deathYear: value })}
-                  placeholder="YYYY"
-                  keyboardType="numeric"
-                />
-              </View>
-            )}
-          </ScrollView>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </View>
 
           <View style={styles.modalFooter}>
             <Button
               onPress={handleAddMember}
               style={styles.saveButton}
-              textStyle={styles.saveButtonText}
               disabled={isLoading}
             >
               <Save size={20} color={Colors.white} style={styles.buttonIcon} />
-              Add Member
+              <Text style={styles.saveButtonText}>
+                {isLoading ? 'Adding...' : 'Add Member'}
+              </Text>
             </Button>
           </View>
         </View>
@@ -502,9 +400,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -519,147 +414,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
-  addButton: {
+  headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    gap: 12,
+  },
+  refreshButton: {
+    padding: 8,
     borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  addButtonText: {
-    color: Colors.white,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  treeContainer: {
-    padding: 20,
-  },
-  familyLevel: {
-    marginBottom: 30,
-  },
-  levelTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 15,
-  },
-  membersRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 15,
-  },
-  memberCard: {
-    width: (width - 70) / 2,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  selectedCard: {
-    borderColor: Colors.primary,
-    borderWidth: 2,
-  },
-  memberAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginBottom: 10,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.lightGray,
-    borderRadius: 30,
+  addButton: {
+    backgroundColor: Colors.primary,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.gray,
-  },
-  memberName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  memberRelationship: {
-    fontSize: 14,
-    color: Colors.gray,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  memberYears: {
-    fontSize: 12,
-    color: Colors.gray,
-    textAlign: 'center',
-  },
-  deceasedBadge: {
-    backgroundColor: Colors.error,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 4,
-  },
-  deceasedText: {
-    fontSize: 10,
-    color: Colors.white,
-    fontWeight: '600',
-  },
-  childrenLevel: {
-    marginBottom: 30,
-  },
-  familySection: {
-    marginTop: 20,
+  content: {
+    flex: 1,
     padding: 20,
-  },
-  familyDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray,
-    marginBottom: 20,
-  },
-  familyDividerText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 10,
-  },
-  familyContent: {
-    gap: 20,
-  },
-  spouseSection: {
-    marginBottom: 20,
-  },
-  childrenSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 10,
-  },
-  noFamilyData: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  noFamilyDataText: {
-    fontSize: 16,
-    color: Colors.gray,
-    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -667,7 +444,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 18,
     color: Colors.gray,
   },
   errorContainer: {
@@ -693,6 +470,12 @@ const styles = StyleSheet.create({
     color: Colors.gray,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   retryButton: {
     backgroundColor: Colors.primary,
@@ -752,6 +535,12 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 8,
   },
+  helperText: {
+    fontSize: 12,
+    color: '#f59e0b',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
   deceasedContainer: {
     flexDirection: 'row',
     gap: 10,
@@ -794,4 +583,4 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 8,
   },
-});
+}); 

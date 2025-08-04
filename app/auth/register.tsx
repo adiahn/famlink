@@ -1,12 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
+  View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
@@ -14,22 +8,21 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
 import { Colors } from '../../constants/Colors';
-import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react-native';
+import { Eye, EyeOff, UserPlus, ArrowLeft, User, Mail, Phone, Calendar, Lock, Shield } from 'lucide-react-native';
 
 export default function RegisterScreen() {
   const { register, signIn, isLoading, error, clearError } = useAuthStore();
-  
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     phone: '',
+    email: '',
     dateOfBirth: '',
     password: '',
     confirmPassword: '',
+    gender: '',
   });
-  
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const validateForm = () => {
     if (!formData.firstName.trim()) {
@@ -42,6 +35,10 @@ export default function RegisterScreen() {
     }
     if (!formData.phone.trim()) {
       Alert.alert('Error', 'Phone number is required');
+      return false;
+    }
+    if (!formData.email.trim()) {
+      Alert.alert('Error', 'Email address is required');
       return false;
     }
     if (!formData.dateOfBirth.trim()) {
@@ -84,11 +81,11 @@ export default function RegisterScreen() {
     if (result.success) {
       Alert.alert(
         'Registration Successful',
-        'Please check your phone for verification code',
+        'Your account has been created successfully! Now let\'s set up your family.',
         [
           {
-            text: 'OK',
-            onPress: () => router.push('/auth/verification'),
+            text: 'Continue',
+            onPress: () => router.push('/auth/onboarding'),
           },
         ]
       );
@@ -108,122 +105,173 @@ export default function RegisterScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join your family network</Text>
+          <Button
+            title=""
+            variant="ghost"
+            onPress={() => router.back()}
+            style={styles.backButton}
+            leftIcon={<ArrowLeft size={24} color={Colors.primary[600]} />}
+          />
         </View>
 
-        <Card style={styles.formCard}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>First Name</Text>
-            <Input
-              value={formData.firstName}
-              onChangeText={(value) => updateFormData('firstName', value)}
-              placeholder="Enter your first name"
-              autoCapitalize="words"
-            />
+        <View style={styles.content}>
+          <View style={styles.logoContainer}>
+            <UserPlus size={48} color={Colors.primary[600]} />
+            <Text style={styles.logoText}>Create Account</Text>
+            <Text style={styles.tagline}>Join your family network</Text>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Last Name</Text>
-            <Input
-              value={formData.lastName}
-              onChangeText={(value) => updateFormData('lastName', value)}
-              placeholder="Enter your last name"
-              autoCapitalize="words"
-            />
-          </View>
+          <Card style={styles.formCard}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Personal Information</Text>
+              
+              <View style={styles.row}>
+                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.label}>First Name</Text>
+                                     <Input
+                     value={formData.firstName}
+                     onChangeText={(value) => updateFormData('firstName', value)}
+                     placeholder="Enter first name"
+                     autoCapitalize="words"
+                     leftIcon={<User size={16} color={Colors.neutral[500]} />}
+                   />
+                </View>
+                
+                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                  <Text style={styles.label}>Last Name</Text>
+                  <Input
+                    value={formData.lastName}
+                    onChangeText={(value) => updateFormData('lastName', value)}
+                    placeholder="Enter last name"
+                    autoCapitalize="words"
+                    leftIcon={<User size={16} color={Colors.gray} />}
+                  />
+                </View>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <Input
-              value={formData.phone}
-              onChangeText={(value) => updateFormData('phone', value)}
-              placeholder="Enter your phone number"
-              keyboardType="phone-pad"
-            />
-          </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number</Text>
+                <Input
+                  value={formData.phone}
+                  onChangeText={(value) => updateFormData('phone', value)}
+                  placeholder="Enter phone number"
+                  keyboardType="phone-pad"
+                  leftIcon={<Phone size={16} color={Colors.gray} />}
+                />
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Date of Birth</Text>
-            <Input
-              value={formData.dateOfBirth}
-              onChangeText={(value) => updateFormData('dateOfBirth', value)}
-              placeholder="DD/MM/YYYY"
-            />
-          </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email Address</Text>
+                <Input
+                  value={formData.email}
+                  onChangeText={(value) => updateFormData('email', value)}
+                  placeholder="Enter email address"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  leftIcon={<Mail size={16} color={Colors.gray} />}
+                />
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordContainer}>
-              <Input
-                value={formData.password}
-                onChangeText={(value) => updateFormData('password', value)}
-                placeholder="Enter your password"
-                secureTextEntry={!showPassword}
-                style={styles.passwordInput}
-              />
-              <Button
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-                textStyle={styles.eyeButtonText}
-              >
-                {showPassword ? <EyeOff size={20} color={Colors.gray} /> : <Eye size={20} color={Colors.gray} />}
-              </Button>
+              <View style={styles.row}>
+                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.label}>Date of Birth</Text>
+                  <Input
+                    value={formData.dateOfBirth}
+                    onChangeText={(value) => updateFormData('dateOfBirth', value)}
+                    placeholder="DD/MM/YYYY"
+                    leftIcon={<Calendar size={16} color={Colors.gray} />}
+                  />
+                </View>
+                
+                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                  <Text style={styles.label}>Gender (Optional)</Text>
+                  <Input
+                    value={formData.gender}
+                    onChangeText={(value) => updateFormData('gender', value)}
+                    placeholder="Male/Female/Other"
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <View style={styles.passwordContainer}>
-              <Input
-                value={formData.confirmPassword}
-                onChangeText={(value) => updateFormData('confirmPassword', value)}
-                placeholder="Confirm your password"
-                secureTextEntry={!showConfirmPassword}
-                style={styles.passwordInput}
-              />
-              <Button
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.eyeButton}
-                textStyle={styles.eyeButtonText}
-              >
-                {showConfirmPassword ? <EyeOff size={20} color={Colors.gray} /> : <Eye size={20} color={Colors.gray} />}
-              </Button>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Security</Text>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.passwordContainer}>
+                  <Input
+                    value={formData.password}
+                    onChangeText={(value) => updateFormData('password', value)}
+                    placeholder="Create a password"
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    leftIcon={<Lock size={16} color={Colors.gray} />}
+                    style={styles.passwordInput}
+                  />
+                  <Button
+                    title=""
+                    variant="ghost"
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                    leftIcon={
+                      showPassword ? (
+                        <EyeOff size={16} color={Colors.gray} />
+                      ) : (
+                        <Eye size={16} color={Colors.gray} />
+                      )
+                    }
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Confirm Password</Text>
+                <View style={styles.passwordContainer}>
+                  <Input
+                    value={formData.confirmPassword}
+                    onChangeText={(value) => updateFormData('confirmPassword', value)}
+                    placeholder="Confirm your password"
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    leftIcon={<Shield size={16} color={Colors.neutral[500]} />}
+                    style={styles.passwordInput}
+                  />
+                </View>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.buttonGroup}>
-            <Button
-              onPress={handleSignIn}
-              style={[styles.button, styles.signInButton]}
-              textStyle={styles.signInButtonText}
-              disabled={isLoading}
-            >
-              <LogIn size={20} color={Colors.white} style={styles.buttonIcon} />
-              Sign In
-            </Button>
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Create Account"
+                onPress={handleSignUp}
+                disabled={isLoading}
+                style={styles.signUpButton}
+                leftIcon={<UserPlus size={20} color="#ffffff" />}
+              />
+              
+              <Button
+                title="Sign In Instead"
+                variant="outline"
+                onPress={handleSignIn}
+                disabled={isLoading}
+                style={styles.signInButton}
+              />
+            </View>
+          </Card>
 
-            <Button
-              onPress={handleSignUp}
-              style={[styles.button, styles.signUpButton]}
-              textStyle={styles.signUpButtonText}
-              disabled={isLoading}
-            >
-              <UserPlus size={20} color={Colors.white} style={styles.buttonIcon} />
-              Sign Up
-            </Button>
-          </View>
-
-          <View style={styles.infoSection}>
-            <Text style={styles.infoTitle}>What's the difference?</Text>
+          <View style={styles.infoBox}>
+            <Text style={styles.infoTitle}>🔒 Your Privacy Matters</Text>
             <Text style={styles.infoText}>
-              <Text style={styles.bold}>Sign In:</Text> If you already have an account, use this to log in with your existing credentials.
-            </Text>
-            <Text style={styles.infoText}>
-              <Text style={styles.bold}>Sign Up:</Text> Create a new account. You'll receive a verification code on your phone to complete registration.
+              We protect your personal information and never share it with third parties. 
+              Your family tree data is private and secure.
             </Text>
           </View>
-        </Card>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -232,111 +280,99 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#ffffff',
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
   },
   header: {
-    alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingTop: 16,
   },
-  title: {
+  backButton: {
+    alignSelf: 'flex-start',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logoText: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: Colors.text,
+    fontWeight: '700',
+    color: Colors.primary[600],
+    marginTop: 12,
     marginBottom: 8,
   },
-  subtitle: {
+  tagline: {
     fontSize: 16,
-    color: Colors.gray,
+    color: Colors.neutral[500],
     textAlign: 'center',
   },
   formCard: {
-    padding: 20,
+    marginBottom: 24,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.dark,
+    marginBottom: 16,
+  },
+  row: {
+    flexDirection: 'row',
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: Colors.text,
+    color: Colors.dark,
     marginBottom: 8,
   },
   passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    position: 'relative',
   },
   passwordInput: {
-    flex: 1,
-    marginRight: 10,
+    paddingRight: 50,
   },
   eyeButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: Colors.lightGray,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 0,
   },
-  eyeButtonText: {
-    color: Colors.gray,
-  },
-  buttonGroup: {
-    marginTop: 30,
-    gap: 15,
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  signInButton: {
-    backgroundColor: Colors.primary,
-  },
-  signInButtonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '600',
+  buttonContainer: {
+    gap: 12,
   },
   signUpButton: {
-    backgroundColor: Colors.secondary,
+    marginTop: 8,
   },
-  signUpButtonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '600',
+  signInButton: {
+    marginTop: 8,
   },
-  buttonIcon: {
-    marginRight: 8,
-  },
-  infoSection: {
-    marginTop: 30,
-    padding: 15,
+  infoBox: {
     backgroundColor: Colors.lightGray,
-    borderRadius: 8,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
   },
   infoTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 10,
+    fontWeight: '700',
+    color: Colors.dark,
+    marginBottom: 8,
   },
   infoText: {
     fontSize: 14,
     color: Colors.gray,
     lineHeight: 20,
-    marginBottom: 8,
   },
-  bold: {
-    fontWeight: '600',
-    color: Colors.text,
-  },
-});
 });

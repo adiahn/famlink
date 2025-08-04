@@ -8,6 +8,15 @@ interface Family {
   creatorJoinId: string;
   isMainFamily: boolean;
   members: FamilyMember[];
+  linkedMembers: FamilyMember[];
+  linkedFamilies: {
+    id: string;
+    linkedFamilyId: string;
+    linkedFamilyName: string;
+    linkedAt: string;
+    linkedBy: string;
+  }[];
+  totalMembers: number;
 }
 
 interface FamilyState {
@@ -68,7 +77,10 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
         set({
           family: {
             ...response.data.family,
-            members: response.data.family.members || []
+            members: response.data.members || [],
+            linkedMembers: response.data.linkedMembers || [],
+            linkedFamilies: response.data.linkedFamilies || [],
+            totalMembers: response.data.totalMembers || 0
           },
           isLoading: false,
           error: null
@@ -101,7 +113,10 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
         set({
           family: {
             ...response.data.family,
-            members: response.data.family.members || []
+            members: response.data.members || [],
+            linkedMembers: response.data.linkedMembers || [],
+            linkedFamilies: response.data.linkedFamilies || [],
+            totalMembers: response.data.totalMembers || 0
           },
           isLoading: false,
           error: null

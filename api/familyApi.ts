@@ -43,8 +43,17 @@ export interface FamilyResponse {
       creatorId: string;
       creatorJoinId: string;
       isMainFamily: boolean;
-      members?: FamilyMember[];
     };
+    members?: FamilyMember[];
+    linkedMembers?: FamilyMember[];
+    linkedFamilies?: {
+      id: string;
+      linkedFamilyId: string;
+      linkedFamilyName: string;
+      linkedAt: string;
+      linkedBy: string;
+    }[];
+    totalMembers?: number;
     member?: FamilyMember;
     joinId?: string;
     memberName?: string;
@@ -61,14 +70,20 @@ export interface FamilyResponse {
 
 export interface FamilyMember {
   id: string;
+  firstName: string;
+  lastName: string;
   name: string;
   relationship: string;
   birthYear: string;
   isDeceased: boolean;
+  deathYear?: string;
   isVerified: boolean;
   isFamilyCreator: boolean;
   joinId: string;
+  joinIdUsed: boolean;
   avatarUrl?: string;
+  isLinkedMember?: boolean;
+  linkedFamilyName?: string;
 }
 
 class FamilyApi {

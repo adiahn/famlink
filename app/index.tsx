@@ -3,18 +3,25 @@ import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Users, Shield, Heart, TreePine } from 'lucide-react-native';
+import { useAuthStore } from '../store/authStore';
 
 const { width, height } = Dimensions.get('window');
 
 export default function Welcome() {
+  const { isAuthenticated } = useAuthStore();
+
   useEffect(() => {
-    // Auto-navigate to auth after 3 seconds for demo purposes
+    // Auto-navigate based on authentication status
     const timer = setTimeout(() => {
-      router.push('/auth/onboarding');
+      if (isAuthenticated) {
+        router.replace('/(tabs)');
+      } else {
+        router.push('/auth/login');
+      }
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isAuthenticated]);
 
   return (
     <LinearGradient
@@ -45,7 +52,13 @@ export default function Welcome() {
 
         <Pressable
           style={styles.getStartedButton}
-          onPress={() => router.push('/auth/onboarding')}
+          onPress={() => {
+            if (isAuthenticated) {
+              router.replace('/(tabs)');
+            } else {
+              router.push('/auth/login');
+            }
+          }}
         >
           <Text style={styles.getStartedText}>Get Started</Text>
         </Pressable>

@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TextInput, ScrollView, Pressable, Alert, Modal 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft, Users, Plus, X, ChevronDown } from 'lucide-react-native';
-import { FamilyMember, generateJoinId } from '../../constants/familyData';
+import { useAuthStore } from '../../store/authStore';
+import { useFamilyStore } from '../../store/familyStore';
 
 interface FamilyMemberForm {
   name: string;
@@ -14,11 +15,14 @@ interface FamilyMemberForm {
 }
 
 export default function Onboarding() {
+  const { user, accessToken } = useAuthStore();
+  const { createFamily, addMember } = useFamilyStore();
   const [step, setStep] = useState<'family-name' | 'add-members' | 'verification'>('family-name');
   const [familyName, setFamilyName] = useState('');
   const [familyMembers, setFamilyMembers] = useState<FamilyMemberForm[]>([]);
   const [showRelationshipModal, setShowRelationshipModal] = useState(false);
   const [selectedMemberIndex, setSelectedMemberIndex] = useState<number>(-1);
+  const [isCreating, setIsCreating] = useState(false);
 
   const relationshipTypes = [
     { id: 'self', label: 'Myself', description: 'You' },
@@ -58,7 +62,7 @@ export default function Onboarding() {
     setShowRelationshipModal(false);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     console.log('handleNext called with step:', step);
     
     if (step === 'family-name') {
@@ -104,38 +108,60 @@ export default function Onboarding() {
       setStep('verification');
     } else if (step === 'verification') {
       console.log('Creating family...');
+      if (!accessToken) {
+        Alert.alert('Error', 'You must be logged in to create a family');
+        return;
+      }
+
+      setIsCreating(true);
       try {
         console.log('Creating family with:', { familyName, memberCount: familyMembers.length });
         
-        // In real app, this would save to backend
+        // Generate a simple Join ID based on user's name
         const selfMember = familyMembers.find(member => member.relationship === 'self');
-        console.log('Self member found:', selfMember);
-        
         let creatorJoinId = 'FAM001';
         if (selfMember && selfMember.name) {
           const nameParts = selfMember.name.trim().split(' ');
           const firstName = nameParts[0] || '';
           const lastName = nameParts[1] || '';
-          creatorJoinId = generateJoinId(firstName, lastName);
+          creatorJoinId = `${firstName.toUpperCase().substring(0, 3)}${lastName.toUpperCase().substring(0, 2)}01`;
           console.log('Generated Join ID:', creatorJoinId);
         }
         
-        Alert.alert(
-          'Family Created Successfully!',
-          `Your family "${familyName}" has been created with ${familyMembers.length} members.\n\nYour Join ID: ${creatorJoinId}\n\nShare this Join ID with other family members so they can link their families to yours.`,
-          [
-            {
-              text: 'Continue',
-              onPress: () => {
-                console.log('Navigating to tabs...');
-                router.replace('/(tabs)');
+        // Create the family
+        const familyResult = await createFamily({
+          name: familyName,
+          creatorJoinId: creatorJoinId
+        }, accessToken);
+        
+        if (familyResult.success) {
+          console.log('Family created successfully');
+          
+          // For now, we'll just show success message
+          // The family members will be added through the family tree interface
+          // This avoids the complexity of getting the family ID from the response
+          
+          Alert.alert(
+            'Family Created Successfully!',
+            `Your family "${familyName}" has been created!\n\nYour Join ID: ${creatorJoinId}\n\nYou can now add family members through the family tree. Share your Join ID with other family members so they can link their families to yours.`,
+            [
+              {
+                text: 'Continue',
+                onPress: () => {
+                  console.log('Navigating to tabs...');
+                  router.replace('/(tabs)');
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        } else {
+          Alert.alert('Error', familyResult.message || 'Failed to create family');
+        }
       } catch (error) {
         console.error('Error creating family:', error);
         Alert.alert('Error', 'There was an error creating your family. Please try again.');
+      } finally {
+        setIsCreating(false);
       }
     }
   };
@@ -337,15 +363,15 @@ export default function Onboarding() {
       <View style={styles.bottomContainer}>
         <Pressable 
           style={styles.nextButton} 
-          onPress={() => {
+          onPress={async () => {
             console.log('Button pressed! Current step:', step);
-            handleNext();
+            await handleNext();
           }}
         >
           <Text style={styles.nextButtonText}>
             {step === 'family-name' && 'Continue'}
             {step === 'add-members' && 'Review Family'}
-            {step === 'verification' && 'Create Family'}
+            {step === 'verification' && (isCreating ? 'Creating...' : 'Create Family')}
           </Text>
         </Pressable>
       </View>

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { TreePine, Users, Search, Bell, User } from 'lucide-react-native';
+import { TreePine, Users, Bell, User } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -41,15 +41,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="search"
-        options={{
-          title: 'Search',
-          tabBarIcon: ({ size, color }) => (
-            <Search size={size} color={color} strokeWidth={2} />
-          ),
-        }}
-      />
+
       <Tabs.Screen
         name="notifications"
         options={{

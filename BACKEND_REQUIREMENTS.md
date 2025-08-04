@@ -104,22 +104,22 @@ Content-Type: application/json
 
 Request Body:
 {
-    "firstName": "string",
-    "lastName": "string", 
-    "phone": "string",
+  "firstName": "string",
+  "lastName": "string", 
+  "phone": "string",
     "dateOfBirth": "DD/MM/YYYY",
-    "password": "string",
-    "confirmPassword": "string"
+  "password": "string",
+  "confirmPassword": "string"
 }
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Registration successful",
-    "data": {
+  "data": {
         "userId": "uuid",
         "verificationRequired": true
-    }
+  }
 }
 ```
 
@@ -130,25 +130,25 @@ Content-Type: application/json
 
 Request Body:
 {
-    "phone": "string",
-    "password": "string"
+  "phone": "string",
+  "password": "string"
 }
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Sign in successful",
-    "data": {
-        "user": {
-            "id": "uuid",
-            "firstName": "string",
-            "lastName": "string",
-            "phone": "string",
+  "data": {
+    "user": {
+      "id": "uuid",
+      "firstName": "string",
+      "lastName": "string",
+      "phone": "string",
             "isVerified": boolean
-        },
+    },
         "accessToken": "string",
         "refreshToken": "string"
-    }
+  }
 }
 ```
 
@@ -165,14 +165,14 @@ Request Body:
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Phone verified successfully",
-    "data": {
+  "data": {
         "user": {
             "id": "uuid",
             "isVerified": true
         }
-    }
+  }
 }
 ```
 
@@ -188,7 +188,7 @@ Request Body:
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Verification code sent"
 }
 ```
@@ -205,11 +205,11 @@ Request Body:
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "accessToken": "string",
         "refreshToken": "string"
-    }
+  }
 }
 ```
 
@@ -220,7 +220,7 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Logged out successfully"
 }
 ```
@@ -241,9 +241,9 @@ Request Body:
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Family created successfully",
-    "data": {
+  "data": {
         "family": {
             "id": "uuid",
             "name": "string",
@@ -251,7 +251,7 @@ Response:
             "creatorJoinId": "string",
             "isMainFamily": true
         }
-    }
+  }
 }
 ```
 
@@ -262,11 +262,11 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "family": {
-            "id": "uuid",
-            "name": "string",
+      "id": "uuid",
+      "name": "string",
             "creatorId": "uuid",
             "creatorJoinId": "string",
             "isMainFamily": boolean,
@@ -275,7 +275,7 @@ Response:
                     "id": "uuid",
                     "name": "string",
                     "relationship": "string",
-                    "birthYear": "string",
+      "birthYear": "string",
                     "isDeceased": boolean,
                     "isVerified": boolean,
                     "isFamilyCreator": boolean,
@@ -284,7 +284,7 @@ Response:
                 }
             ]
         }
-    }
+  }
 }
 ```
 
@@ -299,20 +299,20 @@ Request Body:
     "firstName": "string",
     "lastName": "string",
     "relationship": "string",
-    "birthYear": "string",
+  "birthYear": "string",
     "isDeceased": boolean,
-    "deathYear": "string",
+  "deathYear": "string",
     "avatar": "file" // multipart/form-data
 }
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Family member added successfully",
-    "data": {
-        "member": {
-            "id": "uuid",
-            "name": "string",
+  "data": {
+    "member": {
+      "id": "uuid",
+      "name": "string",
             "relationship": "string",
             "birthYear": "string",
             "isDeceased": boolean,
@@ -321,7 +321,7 @@ Response:
             "joinId": "string",
             "avatarUrl": "string"
         }
-    }
+  }
 }
 ```
 
@@ -336,17 +336,17 @@ Request Body:
     "firstName": "string",
     "lastName": "string",
     "relationship": "string",
-    "birthYear": "string",
+  "birthYear": "string",
     "isDeceased": boolean,
-    "deathYear": "string",
+  "deathYear": "string",
     "avatar": "file" // multipart/form-data
 }
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Family member updated successfully",
-    "data": {
+  "data": {
         "member": {
             "id": "uuid",
             "name": "string",
@@ -358,7 +358,7 @@ Response:
             "joinId": "string",
             "avatarUrl": "string"
         }
-    }
+  }
 }
 ```
 
@@ -369,7 +369,7 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Family member deleted successfully"
 }
 ```
@@ -389,11 +389,11 @@ Request Body:
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "joinId": "string",
         "memberName": "string"
-    }
+  }
 }
 ```
 
@@ -410,15 +410,15 @@ Request Body:
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Family linked successfully",
-    "data": {
+  "data": {
         "linkedFamily": {
-            "id": "uuid",
+        "id": "uuid",
             "name": "string",
             "creatorName": "string"
-        }
     }
+  }
 }
 ```
 
@@ -429,13 +429,13 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "isValid": boolean,
         "memberName": "string",
         "familyName": "string",
         "isFamilyCreator": boolean
-    }
+  }
 }
 ```
 
@@ -448,10 +448,10 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "user": {
-            "id": "uuid",
+        "id": "uuid",
             "firstName": "string",
             "lastName": "string",
             "phone": "string",
@@ -459,8 +459,8 @@ Response:
             "isVerified": boolean,
             "profilePictureUrl": "string",
             "createdAt": "timestamp"
-        }
     }
+  }
 }
 ```
 
@@ -481,18 +481,18 @@ Request Body:
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Profile updated successfully",
-    "data": {
+  "data": {
         "user": {
-            "id": "uuid",
+        "id": "uuid",
             "firstName": "string",
             "lastName": "string",
             "phone": "string",
             "dateOfBirth": "string",
             "profilePictureUrl": "string"
-        }
     }
+  }
 }
 ```
 
@@ -511,7 +511,7 @@ Request Body:
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Password changed successfully"
 }
 ```
@@ -525,13 +525,13 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "showProfile": boolean,
         "allowSearch": boolean,
         "notifications": boolean,
         "familyVisibility": boolean
-    }
+  }
 }
 ```
 
@@ -551,7 +551,7 @@ Request Body:
 
 Response:
 {
-    "success": true,
+  "success": true,
     "message": "Privacy settings updated successfully"
 }
 ```
@@ -565,8 +565,8 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "users": [
             {
                 "id": "uuid",
@@ -595,13 +595,13 @@ Authorization: Bearer <access_token>
 
 Response:
 {
-    "success": true,
-    "data": {
+  "success": true,
+  "data": {
         "familyMembers": 12,
         "linkedFamilies": 3,
         "verifiedMembers": 8,
         "totalConnections": 25
-    }
+  }
 }
 ```
 

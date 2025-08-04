@@ -1,88 +1,151 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform,
+} from 'react-native';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Shield, Eye, EyeOff, TreePine } from 'lucide-react-native';
+import { useAuthStore } from '../../store/authStore';
+import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Card from '../../components/ui/Card';
+import { Colors } from '../../constants/Colors';
+import { Eye, EyeOff, LogIn, UserPlus, ArrowLeft } from 'lucide-react-native';
 
-export default function Login() {
+export default function LoginScreen() {
+  const { signIn, isLoading, error, clearError } = useAuthStore();
   const [formData, setFormData] = useState({
-    idNumber: '',
+    phone: '',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = () => {
-    // Simulate login process
-    router.replace('/(tabs)');
+  const validateForm = () => {
+    if (!formData.phone.trim()) {
+      Alert.alert('Error', 'Please enter your phone number');
+      return false;
+    }
+    if (!formData.password.trim()) {
+      Alert.alert('Error', 'Please enter your password');
+      return false;
+    }
+    if (formData.password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSignIn = async () => {
+    if (!validateForm()) return;
+    clearError();
+    
+    const result = await signIn({
+      phone: formData.phone,
+      password: formData.password,
+    });
+    
+    if (result.success) {
+      // Successfully signed in - navigate to main app
+      router.replace('/(tabs)');
+    } else {
+      // Show error message
+      Alert.alert('Sign In Failed', result.message);
+    }
+  };
+
+  const handleSignUp = () => {
+    router.push('/auth/register');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#64748b" strokeWidth={2} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Sign In</Text>
-          <View style={styles.placeholder} />
+          <Button
+            variant="ghost"
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <ArrowLeft size={24} color={Colors.primary} />
+          </Button>
         </View>
 
         <View style={styles.content}>
           <View style={styles.logoContainer}>
-            <TreePine size={48} color="#2563eb" strokeWidth={2} />
-            <Text style={styles.logoText}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to your FamLink account</Text>
+            <Text style={styles.logoText}>FamLink</Text>
+            <Text style={styles.tagline}>Welcome back to your family</Text>
           </View>
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Shield size={20} color="#64748b" strokeWidth={2} />
-              <TextInput
-                style={styles.input}
-                placeholder="NIN or BVN"
-                value={formData.idNumber}
-                onChangeText={(text) => setFormData({ ...formData, idNumber: text })}
-                keyboardType="numeric"
-                placeholderTextColor="#94a3b8"
+          <Card style={styles.formCard}>
+            <Text style={styles.title}>Sign In</Text>
+            <Text style={styles.subtitle}>
+              Enter your phone number and password to access your family tree
+            </Text>
+
+            <View style={styles.form}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number</Text>
+                <Input
+                  placeholder="Enter your phone number"
+                  value={formData.phone}
+                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                  keyboardType="phone-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.passwordContainer}>
+                  <Input
+                    placeholder="Enter your password"
+                    value={formData.password}
+                    onChangeText={(text) => setFormData({ ...formData, password: text })}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={styles.passwordInput}
+                  />
+                  <Button
+                    title=""
+                    variant="ghost"
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                    leftIcon={
+                      showPassword ? (
+                        <EyeOff size={20} color={Colors.gray} />
+                      ) : (
+                        <Eye size={20} color={Colors.gray} />
+                      )
+                    }
+                  />
+                </View>
+              </View>
+
+              <Button
+                title={isLoading ? 'Signing In...' : 'Sign In'}
+                onPress={handleSignIn}
+                disabled={isLoading}
+                style={styles.signInButton}
+                leftIcon={<LogIn size={20} color="#ffffff" />}
               />
             </View>
+          </Card>
 
-            <View style={styles.inputContainer}>
-              <Pressable
-                style={styles.passwordToggle}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? (
-                  <EyeOff size={20} color="#64748b" strokeWidth={2} />
-                ) : (
-                  <Eye size={20} color="#64748b" strokeWidth={2} />
-                )}
-              </Pressable>
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                value={formData.password}
-                onChangeText={(text) => setFormData({ ...formData, password: text })}
-                secureTextEntry={!showPassword}
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-
-            <Pressable>
-              <Text style={styles.forgotText}>Forgot your password?</Text>
-            </Pressable>
-
-            <Pressable style={styles.loginButton} onPress={handleLogin}>
-              <Text style={styles.loginButtonText}>Sign In</Text>
-            </Pressable>
-
-            <Pressable onPress={() => router.push('/auth/register')}>
-              <Text style={styles.registerText}>Don't have an account? Create one</Text>
-            </Pressable>
+          <View style={styles.signUpContainer}>
+            <Text style={styles.signUpText}>
+              Don't have an account?{' '}
+              <Text style={styles.signUpLink} onPress={handleSignUp}>
+                Sign up
+              </Text>
+            </Text>
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -95,100 +158,87 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    paddingTop: 16,
   },
   backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  placeholder: {
-    width: 40,
+    alignSelf: 'flex-start',
   },
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 60,
-    justifyContent: 'center',
+    paddingTop: 40,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 40,
   },
   logoText: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#1e293b',
-    marginTop: 16,
+    color: Colors.primary,
     marginBottom: 8,
   },
-  subtitle: {
+  tagline: {
     fontSize: 16,
-    color: '#64748b',
+    color: Colors.gray,
+    textAlign: 'center',
+  },
+  formCard: {
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.dark,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.gray,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 20,
   },
   form: {
-    width: '100%',
+    gap: 20,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  inputGroup: {
+    gap: 8,
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1e293b',
-    marginLeft: 12,
-  },
-  passwordToggle: {
-    padding: 4,
-  },
-  forgotText: {
-    color: '#2563eb',
+  label: {
     fontSize: 14,
-    textAlign: 'right',
-    marginBottom: 32,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: Colors.dark,
   },
-  loginButton: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 16,
-    borderRadius: 12,
+  passwordContainer: {
+    position: 'relative',
+  },
+  passwordInput: {
+    paddingRight: 50,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 0,
+  },
+  signInButton: {
+    marginTop: 8,
+  },
+  signUpContainer: {
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#2563eb',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    marginTop: 24,
   },
-  loginButtonText: {
-    color: '#ffffff',
+  signUpText: {
     fontSize: 16,
-    fontWeight: '700',
-  },
-  registerText: {
-    color: '#2563eb',
-    fontSize: 14,
+    color: Colors.gray,
     textAlign: 'center',
-    fontWeight: '500',
+  },
+  signUpLink: {
+    color: Colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

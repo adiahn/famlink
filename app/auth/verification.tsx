@@ -1,95 +1,127 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Alert, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Shield, CircleCheck as CheckCircle, Clock } from 'lucide-react-native';
+import { useAuthStore } from '../../store/authStore';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import { Colors } from '../../constants/Colors';
+import { Mail, ArrowLeft, RefreshCw } from 'lucide-react-native';
 
 export default function Verification() {
-  const [verificationStatus, setVerificationStatus] = useState<'pending' | 'success' | 'failed'>('pending');
+  const { verifyEmail, resendVerification, isLoading, clearError } = useAuthStore();
+  const [verificationCode, setVerificationCode] = useState('');
+  const [email, setEmail] = useState(''); // In a real app, this would come from the registration flow
 
-  useEffect(() => {
-    // Simulate verification process
-    const timer = setTimeout(() => {
-      setVerificationStatus('success');
-    }, 3000);
+  const handleVerifyEmail = async () => {
+    if (!verificationCode.trim()) {
+      Alert.alert('Error', 'Please enter the verification code');
+      return;
+    }
 
-    return () => clearTimeout(timer);
-  }, []);
+    clearError();
+    const result = await verifyEmail({
+      email: email || 'user@example.com', // In a real app, get this from registration
+      verificationCode: verificationCode,
+    });
 
-  const handleContinue = () => {
-    router.replace('/(tabs)');
+    if (result.success) {
+      Alert.alert(
+        'Verification Successful',
+        'Your email has been verified. Welcome to FamLink!',
+        [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+      );
+    } else {
+      Alert.alert('Verification Failed', result.message);
+    }
+  };
+
+  const handleResendCode = async () => {
+    clearError();
+    const result = await resendVerification(email || 'user@example.com');
+    
+    if (result.success) {
+      Alert.alert('Code Sent', 'A new verification code has been sent to your email');
+    } else {
+      Alert.alert('Error', result.message);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Button
+          variant="ghost"
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <ArrowLeft size={24} color={Colors.primary} />
+        </Button>
+      </View>
+
       <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          {verificationStatus === 'pending' && (
-            <Clock size={60} color="#ea580c" strokeWidth={2} />
-          )}
-          {verificationStatus === 'success' && (
-            <CheckCircle size={60} color="#059669" strokeWidth={2} />
-          )}
-          {verificationStatus === 'failed' && (
-            <Shield size={60} color="#dc2626" strokeWidth={2} />
-          )}
+        <View style={styles.logoContainer}>
+          <Mail size={48} color={Colors.primary} />
+          <Text style={styles.logoText}>Verify Your Email</Text>
+          <Text style={styles.tagline}>Enter the code sent to your email</Text>
         </View>
 
-        <Text style={styles.title}>
-          {verificationStatus === 'pending' && 'Verifying Your Identity'}
-          {verificationStatus === 'success' && 'Verification Successful'}
-          {verificationStatus === 'failed' && 'Verification Failed'}
-        </Text>
-
-        <Text style={styles.description}>
-          {verificationStatus === 'pending' && 
-            'We are verifying your government-issued ID with official databases. This may take a few moments.'}
-          {verificationStatus === 'success' && 
-            'Your identity has been successfully verified. Welcome to FamLink!'}
-          {verificationStatus === 'failed' && 
-            'We could not verify your identity. Please check your ID details and try again.'}
-        </Text>
-
-        {verificationStatus === 'pending' && (
-          <View style={styles.loadingContainer}>
-            <View style={styles.loadingBar}>
-              <View style={styles.loadingProgress} />
-            </View>
-            <Text style={styles.loadingText}>Checking with government databases...</Text>
+        <Card style={styles.formCard}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Verification Code</Text>
+            <TextInput
+              style={styles.codeInput}
+              value={verificationCode}
+              onChangeText={setVerificationCode}
+              placeholder="Enter 6-digit code"
+              keyboardType="numeric"
+              maxLength={6}
+              autoFocus
+            />
           </View>
-        )}
 
-        {verificationStatus === 'success' && (
-          <View style={styles.successInfo}>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Account Created:</Text>
-              <Text style={styles.infoValue}>Successfully</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Next Step:</Text>
-              <Text style={styles.infoValue}>Create Your Family</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Status:</Text>
-              <Text style={[styles.infoValue, styles.verifiedText]}>✓ Ready to Continue</Text>
-            </View>
-          </View>
-        )}
-
-        {verificationStatus === 'success' && (
-          <Pressable style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue to FamLink</Text>
-          </Pressable>
-        )}
-
-        {verificationStatus === 'failed' && (
-          <Pressable 
-            style={styles.retryButton} 
-            onPress={() => router.back()}
+          <Button
+            onPress={handleVerifyEmail}
+            disabled={isLoading || !verificationCode.trim()}
+            style={styles.verifyButton}
           >
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </Pressable>
-        )}
+            <Text style={styles.verifyButtonText}>
+              {isLoading ? 'Verifying...' : 'Verify Email'}
+            </Text>
+          </Button>
+        </Card>
+
+        <Card style={styles.resendCard}>
+          <Text style={styles.resendTitle}>Didn't receive the code?</Text>
+          <Text style={styles.resendSubtitle}>
+            Check your email spam folder or request a new code
+          </Text>
+          
+          <Button
+            variant="outline"
+            onPress={handleResendCode}
+            disabled={isLoading}
+            style={styles.resendButton}
+          >
+            <RefreshCw size={16} color={Colors.primary} />
+            <Text style={styles.resendButtonText}>Resend Code</Text>
+          </Button>
+        </Card>
+
+        <View style={styles.infoBox}>
+          <Text style={styles.infoTitle}>💡 Need Help?</Text>
+          <Text style={styles.infoText}>
+            If you're having trouble verifying your email, you can go back and try signing in with a different account.
+          </Text>
+          
+          <Button
+            variant="ghost"
+            onPress={() => router.push('/auth/login')}
+            style={styles.backToLoginButton}
+          >
+            <Text style={styles.backToLoginText}>Back to Sign In</Text>
+          </Button>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -100,114 +132,120 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+  },
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
+    paddingTop: 40,
   },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#f8fafc',
+  logoContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
+    marginBottom: 40,
   },
-  title: {
-    fontSize: 24,
+  logoText: {
+    fontSize: 28,
     fontWeight: '700',
-    color: '#1e293b',
-    textAlign: 'center',
-    marginBottom: 16,
+    color: Colors.primary,
+    marginTop: 16,
+    marginBottom: 8,
   },
-  description: {
+  tagline: {
     fontSize: 16,
-    color: '#64748b',
+    color: Colors.gray,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
   },
-  loadingContainer: {
-    width: '100%',
-    alignItems: 'center',
+  formCard: {
+    marginBottom: 24,
   },
-  loadingBar: {
-    width: '100%',
-    height: 4,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginBottom: 16,
+  inputGroup: {
+    marginBottom: 24,
   },
-  loadingProgress: {
-    height: '100%',
-    backgroundColor: '#ea580c',
-    borderRadius: 2,
-    width: '70%',
-  },
-  loadingText: {
+  label: {
     fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
+    fontWeight: '600',
+    color: Colors.dark,
+    marginBottom: 8,
   },
-  successInfo: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
+  codeInput: {
+    borderWidth: 2,
+    borderColor: Colors.lightGray,
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 18,
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontWeight: '600',
+    color: Colors.dark,
   },
-  infoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  verifyButton: {
+    marginTop: 8,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#1e293b',
+  verifyButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '600',
   },
-  verifiedText: {
-    color: '#059669',
+  resendCard: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  continueButton: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 24,
-    shadowColor: '#2563eb',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  continueButtonText: {
-    color: '#ffffff',
+  resendTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: Colors.dark,
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  retryButton: {
-    backgroundColor: '#dc2626',
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 24,
+  resendSubtitle: {
+    fontSize: 14,
+    color: Colors.gray,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
   },
-  retryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
+  resendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  resendButtonText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoBox: {
+    backgroundColor: Colors.lightGray,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  infoTitle: {
+    fontSize: 14,
     fontWeight: '700',
+    color: Colors.dark,
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: Colors.gray,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  backToLoginButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  backToLoginText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
