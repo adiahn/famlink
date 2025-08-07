@@ -1,43 +1,88 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Settings, Shield, Bell, CircleHelp as HelpCircle, LogOut, ChevronRight, CreditCard as Edit, Eye, EyeOff, Globe, Lock, Phone, Calendar, Camera, Save, X } from 'lucide-react-native';
-
-const profileData = {
-  firstName: 'Fatima',
-  lastName: 'Yusuf',
-  phone: '+234 803 123 4567',
-  dateOfBirth: '15/03/1990',
-  verified: true,
-  joinedDate: 'January 2025',
-  familyMembers: 12,
-  connections: 8,
-};
+import { User, Settings, Shield, Bell, CircleHelp as HelpCircle, LogOut, ChevronRight, CreditCard as Edit, Eye, EyeOff, Globe, Lock, Phone, Calendar, Camera, Save, X, Users, Link, CheckCircle, BarChart3 } from 'lucide-react-native';
+import { useAuthStore } from '../../store/authStore';
+import { userApi, UserProfile, PrivacySettings, UserStatistics } from '../../api/userApi';
+import Colors from '../../constants/Colors';
 
 export default function Profile() {
+  const { accessToken, logout } = useAuthStore();
+  
+  // State for profile data
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [statistics, setStatistics] = useState<UserStatistics | null>(null);
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings | null>(null);
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Edit mode states
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
+  // Form data
   const [formData, setFormData] = useState({
-    firstName: profileData.firstName,
-    lastName: profileData.lastName,
-    phone: profileData.phone,
-    dateOfBirth: profileData.dateOfBirth,
+    firstName: '',
+    lastName: '',
+    phone: '',
+    dateOfBirth: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
 
-  const [privacySettings, setPrivacySettings] = useState({
-    showProfile: true,
-    allowSearch: true,
-    notifications: true,
-    familyVisibility: false,
-  });
+  // Load profile data on component mount
+  useEffect(() => {
+    loadProfileData();
+  }, []);
 
-  const handleSave = () => {
+  const loadProfileData = async () => {
+    if (!accessToken) return;
+    
+    setIsLoading(true);
+    try {
+      // Load profile, statistics, and privacy settings in parallel
+      const [profileRes, statsRes, privacyRes] = await Promise.all([
+        userApi.getProfile(accessToken),
+        userApi.getStatistics(accessToken),
+        userApi.getPrivacySettings(accessToken)
+      ]);
+
+      if (profileRes.success && profileRes.data?.user) {
+        setProfile(profileRes.data.user);
+        setFormData({
+          firstName: profileRes.data.user.firstName,
+          lastName: profileRes.data.user.lastName,
+          phone: profileRes.data.user.phone,
+          dateOfBirth: profileRes.data.user.dateOfBirth,
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        });
+      }
+
+      if (statsRes.success && statsRes.data) {
+        setStatistics(statsRes.data);
+      }
+
+      if (privacyRes.success && privacyRes.data) {
+        setPrivacySettings(privacyRes.data);
+      }
+    } catch (error) {
+      console.error('Error loading profile data:', error);
+      Alert.alert('Error', 'Failed to load profile data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!accessToken || !profile) return;
+
     // Validate required fields
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       Alert.alert('Error', 'Please enter your first and last name');
@@ -54,42 +99,131 @@ export default function Profile() {
       return;
     }
 
-    // If changing password, validate password fields
-    if (formData.newPassword || formData.confirmPassword) {
-      if (!formData.currentPassword) {
-        Alert.alert('Error', 'Please enter your current password');
-        return;
+    setIsUpdating(true);
+    try {
+      // Update profile
+      const profileRes = await userApi.updateProfile(accessToken, {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        dateOfBirth: formData.dateOfBirth,
+      });
+
+      if (profileRes.success && profileRes.data?.user) {
+        setProfile(profileRes.data.user);
       }
-      
-      if (formData.newPassword.length < 6) {
-        Alert.alert('Error', 'New password must be at least 6 characters long');
-        return;
+
+      // Change password if provided
+      if (formData.newPassword && formData.confirmPassword) {
+        if (!formData.currentPassword) {
+          Alert.alert('Error', 'Please enter your current password');
+          return;
+        }
+        
+        if (formData.newPassword.length < 6) {
+          Alert.alert('Error', 'New password must be at least 6 characters long');
+          return;
+        }
+        
+        if (formData.newPassword !== formData.confirmPassword) {
+          Alert.alert('Error', 'New passwords do not match');
+          return;
+        }
+
+        const passwordRes = await userApi.changePassword(accessToken, {
+          currentPassword: formData.currentPassword,
+          newPassword: formData.newPassword,
+          confirmPassword: formData.confirmPassword,
+        });
+
+        if (passwordRes.success) {
+          Alert.alert('Success', 'Password changed successfully');
+          // Clear password fields
+          setFormData(prev => ({
+            ...prev,
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: '',
+          }));
+        }
       }
-      
-      if (formData.newPassword !== formData.confirmPassword) {
-        Alert.alert('Error', 'New passwords do not match');
-        return;
-      }
+
+      Alert.alert('Success', 'Profile updated successfully');
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile');
+    } finally {
+      setIsUpdating(false);
     }
-    
-    // Simulate save process
-    Alert.alert('Success', 'Profile updated successfully');
-    setIsEditing(false);
   };
 
   const handleCancel = () => {
-    // Reset form data to original values
-    setFormData({
-      firstName: profileData.firstName,
-      lastName: profileData.lastName,
-      phone: profileData.phone,
-      dateOfBirth: profileData.dateOfBirth,
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    });
+    if (profile) {
+      setFormData({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phone: profile.phone,
+        dateOfBirth: profile.dateOfBirth,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    }
     setIsEditing(false);
   };
+
+  const handlePrivacyChange = async (key: keyof PrivacySettings, value: boolean | string) => {
+    if (!accessToken || !privacySettings) return;
+
+    try {
+      const updatedSettings = { ...privacySettings, [key]: value };
+      const response = await userApi.updatePrivacySettings(accessToken, updatedSettings);
+      
+      if (response.success) {
+        setPrivacySettings(updatedSettings);
+        Alert.alert('Success', 'Privacy settings updated');
+      }
+    } catch (error) {
+      console.error('Error updating privacy settings:', error);
+      Alert.alert('Error', 'Failed to update privacy settings');
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: logout }
+      ]
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Failed to load profile</Text>
+          <Pressable style={styles.retryButton} onPress={loadProfileData}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const SettingItem = ({ 
     icon: Icon, 
@@ -188,50 +322,67 @@ export default function Profile() {
               <Pressable style={styles.cancelButton} onPress={handleCancel}>
                 <X size={20} color="#64748b" strokeWidth={2} />
               </Pressable>
-              <Pressable style={styles.saveButton} onPress={handleSave}>
-                <Save size={20} color="#2563eb" strokeWidth={2} />
+              <Pressable style={styles.saveButton} onPress={handleSave} disabled={isUpdating}>
+                {isUpdating ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <Save size={20} color="#2563eb" strokeWidth={2} />
+                )}
               </Pressable>
             </View>
           ) : (
             <Pressable style={styles.editButton} onPress={() => setIsEditing(true)}>
-              <Edit size={20} color="#2563eb" strokeWidth={2} />
-            </Pressable>
+            <Edit size={20} color="#2563eb" strokeWidth={2} />
+          </Pressable>
           )}
         </View>
 
         <View style={styles.content}>
-          <View style={styles.profileCard}>
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileInitials}>
-                {formData.firstName[0]}{formData.lastName[0]}
-              </Text>
+        <View style={styles.profileCard}>
+          <View style={styles.profileAvatar}>
+              {profile.profilePictureUrl ? (
+                <Image source={{ uri: profile.profilePictureUrl }} style={styles.profileImage} />
+              ) : (
+            <Text style={styles.profileInitials}>
+                  {profile.firstName[0]}{profile.lastName[0]}
+            </Text>
+              )}
               {isEditing && (
                 <Pressable style={styles.cameraButton}>
                   <Camera size={16} color="#ffffff" strokeWidth={2} />
                 </Pressable>
               )}
-            </View>
-            <Text style={styles.profileName}>{formData.firstName} {formData.lastName}</Text>
-            
-            <View style={styles.verificationBadge}>
-              <Shield size={16} color="#059669" strokeWidth={2} />
-              <Text style={styles.verificationText}>Identity Verified</Text>
-            </View>
+          </View>
+            <Text style={styles.profileName}>{profile.firstName} {profile.lastName}</Text>
+          
+          <View style={styles.verificationBadge}>
+              {profile.isVerified ? (
+                <>
+                  <CheckCircle size={16} color="#059669" strokeWidth={2} />
+            <Text style={styles.verificationText}>Identity Verified</Text>
+                </>
+              ) : (
+                <>
+                  <Shield size={16} color="#f59e0b" strokeWidth={2} />
+                  <Text style={styles.verificationText}>Not Verified</Text>
+                </>
+              )}
+          </View>
 
-            <View style={styles.profileStats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{profileData.familyMembers}</Text>
-                <Text style={styles.statLabel}>Family Members</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{profileData.connections}</Text>
+          <View style={styles.profileStats}>
+            <View style={styles.statItem}>
+                <Text style={styles.statValue}>{statistics?.familyMembers || 0}</Text>
+              <Text style={styles.statLabel}>Family Members</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+                <Text style={styles.statValue}>{statistics?.linkedFamilies || 0}</Text>
+                <Text style={styles.statLabel}>Linked Families</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+                <Text style={styles.statValue}>{statistics?.totalConnections || 0}</Text>
                 <Text style={styles.statLabel}>Connections</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{profileData.joinedDate}</Text>
-                <Text style={styles.statLabel}>Joined</Text>
               </View>
             </View>
           </View>
@@ -277,7 +428,7 @@ export default function Profile() {
                   value={formData.dateOfBirth}
                   onChangeText={(text: string) => setFormData({ ...formData, dateOfBirth: text })}
                 />
-              </View>
+        </View>
 
               <Text style={styles.sectionTitle}>Change Password</Text>
               <View style={styles.sectionCard}>
@@ -308,90 +459,92 @@ export default function Profile() {
             </View>
           ) : (
             <>
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Privacy Settings</Text>
-                <View style={styles.sectionCard}>
-                  <PrivacySetting
-                    title="Profile Visibility"
-                    subtitle="Allow others to find your profile"
-                    value={privacySettings.showProfile}
-                    onValueChange={(value: boolean) => 
-                      setPrivacySettings({ ...privacySettings, showProfile: value })
-                    }
-                  />
-                  <PrivacySetting
-                    title="Search Visibility"
-                    subtitle="Appear in search results"
-                    value={privacySettings.allowSearch}
-                    onValueChange={(value: boolean) => 
-                      setPrivacySettings({ ...privacySettings, allowSearch: value })
-                    }
-                  />
-                  <PrivacySetting
-                    title="Family Tree Visibility"
-                    subtitle="Show your connections to family"
-                    value={privacySettings.familyVisibility}
-                    onValueChange={(value: boolean) => 
-                      setPrivacySettings({ ...privacySettings, familyVisibility: value })
-                    }
-                  />
-                  <PrivacySetting
-                    title="Notifications"
-                    subtitle="Receive family updates and requests"
-                    value={privacySettings.notifications}
-                    onValueChange={(value: boolean) => 
-                      setPrivacySettings({ ...privacySettings, notifications: value })
-                    }
-                  />
-                </View>
-              </View>
+              {privacySettings && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Privacy Settings</Text>
+          <View style={styles.sectionCard}>
+            <PrivacySetting
+              title="Profile Visibility"
+              subtitle="Allow others to find your profile"
+              value={privacySettings.showProfile}
+              onValueChange={(value: boolean) => 
+                        handlePrivacyChange('showProfile', value)
+              }
+            />
+            <PrivacySetting
+              title="Search Visibility"
+              subtitle="Appear in search results"
+              value={privacySettings.allowSearch}
+              onValueChange={(value: boolean) => 
+                        handlePrivacyChange('allowSearch', value)
+              }
+            />
+            <PrivacySetting
+              title="Family Tree Visibility"
+              subtitle="Show your connections to family"
+                      value={privacySettings.familyVisibility === 'public'}
+              onValueChange={(value: boolean) => 
+                        handlePrivacyChange('familyVisibility', value ? 'public' : 'private')
+              }
+            />
+            <PrivacySetting
+              title="Notifications"
+              subtitle="Receive family updates and requests"
+              value={privacySettings.notifications}
+              onValueChange={(value: boolean) => 
+                        handlePrivacyChange('notifications', value)
+              }
+            />
+          </View>
+        </View>
+              )}
 
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Account</Text>
-                <View style={styles.sectionCard}>
-                  <SettingItem
-                    icon={Shield}
-                    title="Identity Verification"
-                    subtitle="Manage your verified ID"
-                    onPress={() => {}}
-                  />
-                  <SettingItem
-                    icon={Lock}
-                    title="Security"
-                    subtitle="Password and security settings"
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.sectionCard}>
+            <SettingItem
+              icon={Shield}
+              title="Identity Verification"
+              subtitle="Manage your verified ID"
+              onPress={() => {}}
+            />
+            <SettingItem
+              icon={Lock}
+              title="Security"
+              subtitle="Password and security settings"
                     onPress={() => setIsEditing(true)}
-                  />
-                </View>
-              </View>
+            />
+          </View>
+        </View>
 
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Support</Text>
-                <View style={styles.sectionCard}>
-                  <SettingItem
-                    icon={HelpCircle}
-                    title="Help & Support"
-                    subtitle="Get help with FamLink"
-                    onPress={() => {}}
-                  />
-                  <SettingItem
-                    icon={Globe}
-                    title="About FamLink"
-                    subtitle="Learn more about our mission"
-                    onPress={() => {}}
-                  />
-                  <SettingItem
-                    icon={Settings}
-                    title="App Settings"
-                    subtitle="Preferences and configurations"
-                    onPress={() => {}}
-                  />
-                </View>
-              </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Support</Text>
+          <View style={styles.sectionCard}>
+            <SettingItem
+              icon={HelpCircle}
+              title="Help & Support"
+              subtitle="Get help with FamLink"
+              onPress={() => {}}
+            />
+            <SettingItem
+              icon={Globe}
+              title="About FamLink"
+              subtitle="Learn more about our mission"
+              onPress={() => {}}
+            />
+            <SettingItem
+              icon={Settings}
+              title="App Settings"
+              subtitle="Preferences and configurations"
+              onPress={() => {}}
+            />
+          </View>
+        </View>
 
-              <Pressable style={styles.logoutButton}>
-                <LogOut size={20} color="#dc2626" strokeWidth={2} />
-                <Text style={styles.logoutText}>Sign Out</Text>
-              </Pressable>
+              <Pressable style={styles.logoutButton} onPress={handleLogout}>
+          <LogOut size={20} color="#dc2626" strokeWidth={2} />
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </Pressable>
             </>
           )}
         </View>
@@ -404,6 +557,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#dc2626',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   scrollContent: {
     flexGrow: 1,
@@ -464,6 +650,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
     position: 'relative',
+  },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   profileInitials: {
     color: '#ffffff',

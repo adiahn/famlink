@@ -9,8 +9,13 @@ import { router, usePathname } from 'expo-router';
 
 export default function RootLayout() {
   useFrameworkReady();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, initializeAuth } = useAuthStore();
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Initialize auth on app startup
+    initializeAuth();
+  }, []);
 
   useEffect(() => {
     // Only redirect if user is not authenticated and trying to access protected routes

@@ -77,6 +77,13 @@ class AuthApi {
 
       const result = await response.json();
       console.log('Sign in response:', result);
+      
+      // Debug token format
+      if (result.success && result.data?.accessToken) {
+        console.log('Received access token:', result.data.accessToken.substring(0, 20) + '...');
+        console.log('Full access token:', result.data.accessToken);
+      }
+      
       return result;
     } catch (error) {
       console.error('Sign in error:', error);

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { familyApi, FamilyResponse, FamilyMember } from '../api/familyApi';
+import { useAuthStore } from './authStore';
 
 interface Family {
   id: string;
@@ -8,15 +9,18 @@ interface Family {
   creatorJoinId: string;
   isMainFamily: boolean;
   members: FamilyMember[];
-  linkedMembers: FamilyMember[];
   linkedFamilies: {
     id: string;
-    linkedFamilyId: string;
-    linkedFamilyName: string;
+    name: string;
     linkedAt: string;
     linkedBy: string;
   }[];
-  totalMembers: number;
+  statistics?: {
+    totalMembers: number;
+    originalMembers: number;
+    linkedMembers: number;
+    linkedFamilies: number;
+  };
 }
 
 interface FamilyState {
@@ -51,7 +55,7 @@ interface FamilyActions {
   deleteMember: (familyId: string, memberId: string, token: string) => Promise<{ success: boolean; message: string }>;
   generateJoinId: (familyId: string, memberId: string, token: string) => Promise<{ success: boolean; message: string; joinId?: string }>;
   linkFamily: (joinId: string, token: string) => Promise<{ success: boolean; message: string }>;
-  validateJoinId: (joinId: string, token: string) => Promise<{ success: boolean; message: string; isValid?: boolean }>;
+  validateJoinId: (joinId: string, token: string) => Promise<{ success: boolean; message: string; isValid?: boolean; memberName?: string; familyName?: string }>;
   setSelectedMember: (memberId: string | null) => void;
   toggleExpandedNode: (nodeId: string) => void;
   clearError: () => void;
@@ -59,34 +63,60 @@ interface FamilyActions {
 }
 
 export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => ({
-  // State
+      // State
   family: null,
-  isLoading: false,
-  error: null,
+      isLoading: false,
+      error: null,
   selectedMember: null,
   expandedNodes: new Set(),
 
-  // Actions
+      // Actions
   getMyFamily: async (token) => {
     set({ isLoading: true, error: null });
     
     try {
       const response: FamilyResponse = await familyApi.getMyFamily(token);
       
+      console.log('getMyFamily response:', response);
+      console.log('response.data:', response.data);
+      console.log('response.data.members:', response.data?.members);
+      
       if (response.success && response.data?.family) {
+        const familyData = {
+          ...response.data.family,
+          members: (response.data.members || []).map((member: any) => ({
+            ...member,
+            name: member.fullName || `${member.firstName} ${member.lastName}`.trim(), // Map fullName to name
+            firstName: member.firstName,
+            lastName: member.lastName,
+            relationship: member.relationship,
+            birthYear: member.birthYear,
+            isDeceased: member.isDeceased,
+            isVerified: member.isVerified,
+            isFamilyCreator: member.isFamilyCreator,
+            joinId: member.joinId,
+            avatarUrl: member.avatarUrl,
+            isLinkedMember: member.isLinkedMember,
+            sourceFamily: member.sourceFamily
+          })),
+          linkedFamilies: response.data.linkedFamilies || [],
+          statistics: response.data.statistics
+        };
+        console.log('Setting family data:', familyData);
         set({
-          family: {
-            ...response.data.family,
-            members: response.data.members || [],
-            linkedMembers: response.data.linkedMembers || [],
-            linkedFamilies: response.data.linkedFamilies || [],
-            totalMembers: response.data.totalMembers || 0
-          },
+          family: familyData,
           isLoading: false,
           error: null
         });
         return { success: true, message: response.message };
       } else {
+        // Check if it's a 401 error and force logout
+        if ((response as any).error?.code === 'AUTHENTICATION_ERROR') {
+          console.log('Authentication error, forcing logout');
+          useAuthStore.getState().logout();
+          return { success: false, message: 'Authentication failed. Please login again.' };
+        }
+        
         set({ 
           isLoading: false, 
           error: response.message || 'Failed to fetch family' 
@@ -113,10 +143,23 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
         set({
           family: {
             ...response.data.family,
-            members: response.data.members || [],
-            linkedMembers: response.data.linkedMembers || [],
+            members: (response.data.members || []).map((member: any) => ({
+              ...member,
+              name: member.fullName || `${member.firstName} ${member.lastName}`.trim(),
+              firstName: member.firstName,
+              lastName: member.lastName,
+              relationship: member.relationship,
+              birthYear: member.birthYear,
+              isDeceased: member.isDeceased,
+              isVerified: member.isVerified,
+              isFamilyCreator: member.isFamilyCreator,
+              joinId: member.joinId,
+              avatarUrl: member.avatarUrl,
+              isLinkedMember: member.isLinkedMember,
+              sourceFamily: member.sourceFamily
+            })),
             linkedFamilies: response.data.linkedFamilies || [],
-            totalMembers: response.data.totalMembers || 0
+            statistics: response.data.statistics
           },
           isLoading: false,
           error: null
@@ -149,10 +192,26 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
         // Update the family with the new member
         const { family } = get();
         if (family) {
+          const newMember = {
+            ...response.data.member,
+            name: response.data.member.fullName || `${response.data.member.firstName} ${response.data.member.lastName}`.trim(),
+            firstName: response.data.member.firstName,
+            lastName: response.data.member.lastName,
+            relationship: response.data.member.relationship,
+            birthYear: response.data.member.birthYear,
+            isDeceased: response.data.member.isDeceased,
+            isVerified: response.data.member.isVerified,
+            isFamilyCreator: response.data.member.isFamilyCreator,
+            joinId: response.data.member.joinId,
+            avatarUrl: response.data.member.avatarUrl,
+            isLinkedMember: response.data.member.isLinkedMember,
+            sourceFamily: response.data.member.sourceFamily
+          };
+          
           set({
             family: {
               ...family,
-              members: [...family.members, response.data.member!]
+              members: [...family.members, newMember]
             },
             isLoading: false,
             error: null
@@ -186,11 +245,27 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
         // Update the family member in the store
         const { family } = get();
         if (family) {
+          const updatedMember = {
+            ...response.data.member,
+            name: response.data.member.fullName || `${response.data.member.firstName} ${response.data.member.lastName}`.trim(),
+            firstName: response.data.member.firstName,
+            lastName: response.data.member.lastName,
+            relationship: response.data.member.relationship,
+            birthYear: response.data.member.birthYear,
+            isDeceased: response.data.member.isDeceased,
+            isVerified: response.data.member.isVerified,
+            isFamilyCreator: response.data.member.isFamilyCreator,
+            joinId: response.data.member.joinId,
+            avatarUrl: response.data.member.avatarUrl,
+            isLinkedMember: response.data.member.isLinkedMember,
+            sourceFamily: response.data.member.sourceFamily
+          };
+          
           set({
             family: {
               ...family,
               members: family.members.map(member => 
-                member.id === memberId ? response.data!.member! : member
+                member.id === memberId ? updatedMember : member
               )
             },
             isLoading: false,
@@ -256,7 +331,7 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
     set({ isLoading: true, error: null });
     
     try {
-      const response: FamilyResponse = await familyApi.generateJoinId(familyId, { memberId }, token);
+      const response: FamilyResponse = await familyApi.getMemberJoinId(memberId, token);
       
       if (response.success && response.data?.joinId) {
         set({ isLoading: false, error: null });
@@ -268,12 +343,12 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
       } else {
         set({ 
           isLoading: false, 
-          error: response.message || 'Failed to generate Join ID' 
+          error: response.message || 'Failed to get Join ID' 
         });
-        return { success: false, message: response.message || 'Failed to generate Join ID' };
+        return { success: false, message: response.message || 'Failed to get Join ID' };
       }
     } catch (error) {
-      console.error('Generate Join ID error:', error);
+      console.error('Get Join ID error:', error);
       set({ 
         isLoading: false, 
         error: 'Network error. Please try again.' 
@@ -321,7 +396,9 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
         return { 
           success: true, 
           message: response.message, 
-          isValid: response.data.isValid 
+          isValid: response.data.isValid,
+          memberName: response.data.memberName,
+          familyName: response.data.familyName
         };
       } else {
         set({ 

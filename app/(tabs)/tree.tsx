@@ -32,6 +32,9 @@ import {
   X,
   Save,
   RefreshCw,
+  Copy,
+  Share2,
+  Link,
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
@@ -73,11 +76,15 @@ export default function TreeScreen() {
     expandedNodes,
     getMyFamily, 
     addMember, 
+    generateJoinId,
     setSelectedMember, 
     toggleExpandedNode 
   } = useFamilyStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showJoinIdModal, setShowJoinIdModal] = useState(false);
+  const [selectedMemberForJoinId, setSelectedMemberForJoinId] = useState<any>(null);
+  const [generatedJoinId, setGeneratedJoinId] = useState<string>('');
   const [formData, setFormData] = useState<AddMemberForm>({
     firstName: '',
     lastName: '',
@@ -189,12 +196,49 @@ export default function TreeScreen() {
     });
   };
 
+  const handleGenerateJoinId = async (member: any) => {
+    if (!accessToken || !family?.id) {
+      Alert.alert('Error', 'You must be logged in to generate Join IDs');
+      return;
+    }
+
+    setSelectedMemberForJoinId(member);
+    setShowJoinIdModal(true);
+
+    try {
+      const result = await generateJoinId(family.id, member.id, accessToken);
+      
+      if (result.success && result.joinId) {
+        setGeneratedJoinId(result.joinId);
+      } else {
+        Alert.alert('Error', result.message || 'Failed to get Join ID');
+      }
+    } catch (error) {
+      console.error('Get Join ID error:', error);
+      Alert.alert('Error', 'Failed to get Join ID. Please try again.');
+    }
+  };
+
+  const handleCopyJoinId = () => {
+    if (generatedJoinId) {
+      // In React Native, you would use Clipboard API
+      Alert.alert('Copied!', 'Join ID copied to clipboard');
+    }
+  };
+
+  const handleShareJoinId = () => {
+    if (generatedJoinId) {
+      // In React Native, you would use Share API
+      Alert.alert('Share', 'Share functionality would open native share dialog');
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Loading family tree...</Text>
-      </View>
+          </View>
     );
   }
 
@@ -232,16 +276,21 @@ export default function TreeScreen() {
           <Pressable style={styles.addButton} onPress={() => setShowAddModal(true)}>
             <Plus size={24} color={Colors.white} />
           </Pressable>
-        </View>
-      </View>
+                  </View>
+              </View>
 
       <View style={styles.content}>
         <FamilyTreeView 
           familyMembers={family.members} 
-          onMemberSelect={(memberId) => setSelectedMember(memberId)}
+          onMemberSelect={(memberId) => {
+            const member = family.members.find(m => m.id === memberId);
+            if (member) {
+              handleGenerateJoinId(member);
+            }
+          }}
         />
-      </View>
-
+            </View>
+      
       {/* Add Member Modal */}
       <Modal
         visible={showAddModal}
@@ -255,7 +304,7 @@ export default function TreeScreen() {
               <X size={24} color={Colors.text} />
             </Pressable>
           </View>
-
+          
           <View style={styles.modalContent}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -276,11 +325,11 @@ export default function TreeScreen() {
                         alignItems: 'center'
                       }}>
                         <Camera size={32} color={Colors.gray} />
-                      </View>
-                    )}
+                  </View>
+                )}
                   </Pressable>
                   <Text style={styles.avatarLabel}>Tap to add photo</Text>
-                </View>
+                  </View>
 
                 {/* Form Fields */}
                 <View style={styles.inputGroup}>
@@ -290,7 +339,7 @@ export default function TreeScreen() {
                     onChangeText={(text) => setFormData({ ...formData, firstName: text })}
                     placeholder="Enter first name"
                   />
-                </View>
+            </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Last Name *</Text>
@@ -299,7 +348,7 @@ export default function TreeScreen() {
                     onChangeText={(text) => setFormData({ ...formData, lastName: text })}
                     placeholder="Enter last name"
                   />
-                </View>
+              </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Relationship *</Text>
@@ -315,9 +364,9 @@ export default function TreeScreen() {
                   ) && (
                     <Text style={styles.helperText}>
                       ⚠️ You must add at least one parent (Father, Mother, or Wife) first
-                    </Text>
-                  )}
-                </View>
+                  </Text>
+              )}
+            </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Birth Year *</Text>
@@ -327,12 +376,12 @@ export default function TreeScreen() {
                     placeholder="e.g., 1990"
                     keyboardType="numeric"
                   />
-                </View>
+        </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Deceased</Text>
                   <View style={styles.deceasedContainer}>
-                    <Pressable
+            <Pressable 
                       style={[
                         styles.deceasedButton,
                         !formData.isDeceased && styles.deceasedButtonActive
@@ -345,8 +394,8 @@ export default function TreeScreen() {
                       ]}>
                         No
                       </Text>
-                    </Pressable>
-                    <Pressable
+            </Pressable>
+            <Pressable 
                       style={[
                         styles.deceasedButton,
                         formData.isDeceased && styles.deceasedButtonActive
@@ -359,9 +408,9 @@ export default function TreeScreen() {
                       ]}>
                         Yes
                       </Text>
-                    </Pressable>
-                  </View>
-                </View>
+          </Pressable>
+          </View>
+        </View>
 
                 {formData.isDeceased && (
                   <View style={styles.inputGroup}>
@@ -372,11 +421,11 @@ export default function TreeScreen() {
                       placeholder="e.g., 2020"
                       keyboardType="numeric"
                     />
-                  </View>
-                )}
+                </View>
+              )}
               </ScrollView>
             </KeyboardAvoidingView>
-          </View>
+      </View>
 
           <View style={styles.modalFooter}>
             <Button
@@ -387,12 +436,70 @@ export default function TreeScreen() {
               <Save size={20} color={Colors.white} style={styles.buttonIcon} />
               <Text style={styles.saveButtonText}>
                 {isLoading ? 'Adding...' : 'Add Member'}
-              </Text>
+          </Text>
             </Button>
-          </View>
+      </View>
         </View>
       </Modal>
-    </View>
+
+      {/* Join ID Modal */}
+      <Modal
+        visible={showJoinIdModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Generate Join ID</Text>
+                  <Pressable
+              style={styles.closeButton}
+              onPress={() => {
+                setShowJoinIdModal(false);
+                setSelectedMemberForJoinId(null);
+                setGeneratedJoinId('');
+              }}
+            >
+              <X size={24} color={Colors.text} />
+        </Pressable>
+      </View>
+
+          <ScrollView style={styles.modalContent}>
+            {selectedMemberForJoinId && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Selected Member</Text>
+                <View style={styles.memberCard}>
+                  <Text style={styles.memberName}>{selectedMemberForJoinId.name}</Text>
+                  <Text style={styles.memberRelationship}>{selectedMemberForJoinId.relationship}</Text>
+                  <Text style={styles.memberId}>ID: {selectedMemberForJoinId.joinId}</Text>
+                </View>
+              </View>
+            )}
+
+            {generatedJoinId && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Generated Join ID</Text>
+                <View style={styles.joinIdContainer}>
+                  <Text style={styles.joinIdText}>{generatedJoinId}</Text>
+                  <View style={styles.joinIdActions}>
+                    <Pressable style={styles.copyButton} onPress={handleCopyJoinId}>
+                      <Copy size={20} color={Colors.white} />
+                      <Text style={styles.copyButtonText}>Copy</Text>
+                    </Pressable>
+                    <Pressable style={styles.shareButton} onPress={handleShareJoinId}>
+                      <Share2 size={20} color={Colors.white} />
+                      <Text style={styles.shareButtonText}>Share</Text>
+                    </Pressable>
+                  </View>
+                </View>
+                <Text style={styles.helperText}>
+                  Share this Join ID with the person you want to link families with. They can use this code on their home page to connect their family tree to yours.
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+      </View>
   );
 }
 
@@ -583,4 +690,76 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 8,
   },
-}); 
+  memberCard: {
+    backgroundColor: Colors.lightGray,
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  memberName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  memberRelationship: {
+    fontSize: 14,
+    color: Colors.gray,
+    marginBottom: 4,
+  },
+  memberId: {
+    fontSize: 12,
+    color: Colors.gray,
+    fontFamily: 'monospace',
+  },
+  joinIdContainer: {
+    backgroundColor: Colors.lightGray,
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  joinIdText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    textAlign: 'center',
+    fontFamily: 'monospace',
+    marginBottom: 16,
+  },
+  joinIdActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  copyButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  copyButtonText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  shareButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.secondary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  shareButtonText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+});

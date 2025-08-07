@@ -63,9 +63,10 @@ const recentActivity = [
 
 export default function Home() {
   const { user, accessToken } = useAuthStore();
-  const { family, getMyFamily, linkFamily, isLoading } = useFamilyStore();
+  const { family, getMyFamily, linkFamily, validateJoinId, isLoading } = useFamilyStore();
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkageId, setLinkageId] = useState('');
+  const [validationData, setValidationData] = useState<any>(null);
 
   // Load family data on component mount
   useEffect(() => {
@@ -73,6 +74,39 @@ export default function Home() {
       getMyFamily(accessToken);
     }
   }, [accessToken]);
+
+  const handleValidateJoinId = async () => {
+    if (!linkageId.trim()) {
+      Alert.alert('Error', 'Please enter a Join ID');
+      return;
+    }
+
+    if (!accessToken) {
+      Alert.alert('Error', 'You must be logged in to validate Join IDs');
+      return;
+    }
+
+    try {
+      const result = await validateJoinId(linkageId, accessToken);
+      
+      if (result.success && result.isValid) {
+        setValidationData(result);
+        Alert.alert(
+          'Join ID Valid',
+          `You are about to link your family with ${result.memberName || 'Unknown Member'} from ${result.familyName || 'Unknown Family'}. Do you want to proceed?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Link Family', onPress: handleLinkFamily }
+          ]
+        );
+      } else {
+        Alert.alert('Invalid Join ID', result.message || 'The Join ID is invalid or has already been used.');
+      }
+    } catch (error) {
+      console.error('Validate Join ID error:', error);
+      Alert.alert('Error', 'Failed to validate Join ID. Please try again.');
+    }
+  };
 
   const handleLinkFamily = async () => {
     if (!linkageId.trim()) {
@@ -97,6 +131,7 @@ export default function Home() {
             onPress: () => {
               setShowLinkModal(false);
               setLinkageId('');
+              setValidationData(null);
             },
           },
         ]
@@ -268,7 +303,7 @@ export default function Home() {
             <View style={styles.modalFooter}>
               <Pressable 
                 style={styles.modalButton} 
-                onPress={handleLinkFamily}
+                onPress={handleValidateJoinId}
               >
                 <Link size={20} color="#ffffff" strokeWidth={2} />
                 <Text style={styles.modalButtonText}>Link Family</Text>

@@ -25,54 +25,73 @@ export interface UpdateMemberRequest {
   avatar?: File;
 }
 
-export interface GenerateJoinIdRequest {
+export interface GetMemberJoinIdResponse {
   memberId: string;
+  memberName: string;
+  joinId: string;
+  isFamilyCreator: boolean;
+  canBeLinked: boolean;
+}
+
+export interface ValidateJoinIdResponse {
+  isValid: boolean;
+  memberName: string;
+  familyName: string;
+  isFamilyCreator: boolean;
+}
+
+export interface LinkFamilyResponse {
+  linkedFamily: {
+    id: string;
+    name: string;
+    creatorName: string;
+  };
+  linkedMembersCount: number;
+  userLinkedMembersCount: number;
+  totalLinkedMembers: number;
 }
 
 export interface LinkFamilyRequest {
   joinId: string;
 }
 
-export interface FamilyResponse {
+export interface FamilyResponse<T = any> {
   success: boolean;
   message: string;
-  data?: {
-    family?: {
-      id: string;
-      name: string;
-      creatorId: string;
-      creatorJoinId: string;
-      isMainFamily: boolean;
-    };
-    members?: FamilyMember[];
-    linkedMembers?: FamilyMember[];
-    linkedFamilies?: {
-      id: string;
-      linkedFamilyId: string;
-      linkedFamilyName: string;
-      linkedAt: string;
-      linkedBy: string;
-    }[];
-    totalMembers?: number;
-    member?: FamilyMember;
-    joinId?: string;
-    memberName?: string;
-    linkedFamily?: {
-      id: string;
-      name: string;
-      creatorName: string;
-    };
-    isValid?: boolean;
-    familyName?: string;
-    isFamilyCreator?: boolean;
+  data?: T;
+}
+
+export interface FamilyData {
+  family?: {
+    id: string;
+    name: string;
+    creatorId: string;
+    creatorJoinId: string;
+    isMainFamily: boolean;
+    createdAt: string;
   };
+  members?: FamilyMember[];
+  linkedFamilies?: {
+    id: string;
+    name: string;
+    linkedAt: string;
+    linkedBy: string;
+  }[];
+  statistics?: {
+    totalMembers: number;
+    originalMembers: number;
+    linkedMembers: number;
+    linkedFamilies: number;
+  };
+  member?: FamilyMember;
 }
 
 export interface FamilyMember {
   id: string;
   firstName: string;
   lastName: string;
-  name: string;
+  fullName: string;
+  name?: string;
   relationship: string;
   birthYear: string;
   isDeceased: boolean;
@@ -83,7 +102,10 @@ export interface FamilyMember {
   joinIdUsed: boolean;
   avatarUrl?: string;
   isLinkedMember?: boolean;
-  linkedFamilyName?: string;
+  sourceFamily?: string;
+  originalFamilyId?: string;
+  linkedTo?: string;
+  linkedFrom?: string;
 }
 
 class FamilyApi {
@@ -96,7 +118,7 @@ class FamilyApi {
     };
   }
 
-  async createFamily(data: CreateFamilyRequest, token: string): Promise<FamilyResponse> {
+  async createFamily(data: CreateFamilyRequest, token: string): Promise<FamilyResponse<FamilyData>> {
     try {
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -113,12 +135,18 @@ class FamilyApi {
     }
   }
 
-  async getMyFamily(token: string): Promise<FamilyResponse> {
+  async getMyFamily(token: string): Promise<FamilyResponse<FamilyData>> {
     try {
+      console.log('Sending token to getMyFamily:', token ? token.substring(0, 20) + '...' : 'null');
+      console.log('Full token:', token);
+      
       const response = await fetch(`${this.baseUrl}/my-family`, {
         method: 'GET',
         headers: this.getAuthHeaders(token),
       });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
       const result = await response.json();
       console.log('Get my family response:', result);
@@ -129,7 +157,7 @@ class FamilyApi {
     }
   }
 
-  async addMember(familyId: string, data: AddMemberRequest, token: string): Promise<FamilyResponse> {
+  async addMember(familyId: string, data: AddMemberRequest, token: string): Promise<FamilyResponse<FamilyData>> {
     try {
       const formData = new FormData();
       formData.append('firstName', data.firstName);
@@ -161,7 +189,7 @@ class FamilyApi {
     }
   }
 
-  async updateMember(familyId: string, memberId: string, data: UpdateMemberRequest, token: string): Promise<FamilyResponse> {
+  async updateMember(familyId: string, memberId: string, data: UpdateMemberRequest, token: string): Promise<FamilyResponse<FamilyData>> {
     try {
       const formData = new FormData();
       formData.append('firstName', data.firstName);
@@ -193,7 +221,7 @@ class FamilyApi {
     }
   }
 
-  async deleteMember(familyId: string, memberId: string, token: string): Promise<FamilyResponse> {
+  async deleteMember(familyId: string, memberId: string, token: string): Promise<FamilyResponse<FamilyData>> {
     try {
       const response = await fetch(`${this.baseUrl}/${familyId}/members/${memberId}`, {
         method: 'DELETE',
@@ -209,24 +237,23 @@ class FamilyApi {
     }
   }
 
-  async generateJoinId(familyId: string, data: GenerateJoinIdRequest, token: string): Promise<FamilyResponse> {
+  async getMemberJoinId(memberId: string, token: string): Promise<FamilyResponse<GetMemberJoinIdResponse>> {
     try {
-      const response = await fetch(`${this.baseUrl}/${familyId}/join-ids`, {
-        method: 'POST',
+      const response = await fetch(`${this.baseUrl}/members/${memberId}/join-id`, {
+        method: 'GET',
         headers: this.getAuthHeaders(token),
-        body: JSON.stringify(data),
       });
 
       const result = await response.json();
-      console.log('Generate join ID response:', result);
+      console.log('Get Member Join ID response:', result);
       return result;
     } catch (error) {
-      console.error('Generate join ID error:', error);
+      console.error('Get Member Join ID error:', error);
       throw error;
     }
   }
 
-  async linkFamily(data: LinkFamilyRequest, token: string): Promise<FamilyResponse> {
+  async linkFamily(data: LinkFamilyRequest, token: string): Promise<FamilyResponse<LinkFamilyResponse>> {
     try {
       const response = await fetch(`${this.baseUrl}/link`, {
         method: 'POST',
@@ -243,7 +270,7 @@ class FamilyApi {
     }
   }
 
-  async validateJoinId(joinId: string, token: string): Promise<FamilyResponse> {
+  async validateJoinId(joinId: string, token: string): Promise<FamilyResponse<ValidateJoinIdResponse>> {
     try {
       const response = await fetch(`${this.baseUrl}/validate-join-id/${joinId}`, {
         method: 'GET',
@@ -251,10 +278,10 @@ class FamilyApi {
       });
 
       const result = await response.json();
-      console.log('Validate join ID response:', result);
+      console.log('Validate Join ID response:', result);
       return result;
     } catch (error) {
-      console.error('Validate join ID error:', error);
+      console.error('Validate Join ID error:', error);
       throw error;
     }
   }

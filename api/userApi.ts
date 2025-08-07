@@ -1,11 +1,21 @@
 import { API_BASE_URL } from '../config/api';
 
+export interface UserProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  dateOfBirth: string;
+  isVerified: boolean;
+  profilePictureUrl: string | null;
+  createdAt: string;
+}
+
 export interface UpdateProfileRequest {
   firstName: string;
   lastName: string;
   phone: string;
   dateOfBirth: string;
-  profilePicture?: File;
 }
 
 export interface ChangePasswordRequest {
@@ -18,31 +28,27 @@ export interface PrivacySettings {
   showProfile: boolean;
   allowSearch: boolean;
   notifications: boolean;
-  familyVisibility: boolean;
+  familyVisibility: 'public' | 'private';
 }
 
-export interface UserResponse {
+export interface UpdatePrivacyRequest {
+  showProfile: boolean;
+  allowSearch: boolean;
+  notifications: boolean;
+  familyVisibility: 'public' | 'private';
+}
+
+export interface UserStatistics {
+  familyMembers: number;
+  linkedFamilies: number;
+  verifiedMembers: number;
+  totalConnections: number;
+}
+
+export interface ApiResponse<T> {
   success: boolean;
-  message: string;
-  data?: {
-    user?: {
-      id: string;
-      firstName: string;
-      lastName: string;
-      phone: string;
-      dateOfBirth: string;
-      isVerified: boolean;
-      profilePictureUrl?: string;
-      createdAt: string;
-    };
-    statistics?: {
-      familyMembers: number;
-      linkedFamilies: number;
-      verifiedMembers: number;
-      totalConnections: number;
-    };
-    privacySettings?: PrivacySettings;
-  };
+  message?: string;
+  data?: T;
 }
 
 class UserApi {
@@ -55,7 +61,7 @@ class UserApi {
     };
   }
 
-  async getProfile(token: string): Promise<UserResponse> {
+  async getProfile(token: string): Promise<ApiResponse<{ user: UserProfile }>> {
     try {
       const response = await fetch(`${this.baseUrl}/profile`, {
         method: 'GET',
@@ -71,23 +77,12 @@ class UserApi {
     }
   }
 
-  async updateProfile(data: UpdateProfileRequest, token: string): Promise<UserResponse> {
+  async updateProfile(token: string, data: UpdateProfileRequest): Promise<ApiResponse<{ user: UserProfile }>> {
     try {
-      const formData = new FormData();
-      formData.append('firstName', data.firstName);
-      formData.append('lastName', data.lastName);
-      formData.append('phone', data.phone);
-      formData.append('dateOfBirth', data.dateOfBirth);
-      if (data.profilePicture) {
-        formData.append('profilePicture', data.profilePicture);
-      }
-
       const response = await fetch(`${this.baseUrl}/profile`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
+        headers: this.getAuthHeaders(token),
+        body: JSON.stringify(data),
       });
 
       const result = await response.json();
@@ -99,7 +94,7 @@ class UserApi {
     }
   }
 
-  async changePassword(data: ChangePasswordRequest, token: string): Promise<UserResponse> {
+  async changePassword(token: string, data: ChangePasswordRequest): Promise<ApiResponse<{}>> {
     try {
       const response = await fetch(`${this.baseUrl}/change-password`, {
         method: 'PUT',
@@ -116,7 +111,7 @@ class UserApi {
     }
   }
 
-  async getPrivacySettings(token: string): Promise<UserResponse> {
+  async getPrivacySettings(token: string): Promise<ApiResponse<PrivacySettings>> {
     try {
       const response = await fetch(`${this.baseUrl}/privacy-settings`, {
         method: 'GET',
@@ -132,7 +127,7 @@ class UserApi {
     }
   }
 
-  async updatePrivacySettings(data: PrivacySettings, token: string): Promise<UserResponse> {
+  async updatePrivacySettings(token: string, data: UpdatePrivacyRequest): Promise<ApiResponse<{}>> {
     try {
       const response = await fetch(`${this.baseUrl}/privacy-settings`, {
         method: 'PUT',
@@ -149,7 +144,7 @@ class UserApi {
     }
   }
 
-  async getStatistics(token: string): Promise<UserResponse> {
+  async getStatistics(token: string): Promise<ApiResponse<UserStatistics>> {
     try {
       const response = await fetch(`${this.baseUrl}/statistics`, {
         method: 'GET',
@@ -166,4 +161,4 @@ class UserApi {
   }
 }
 
-export const userApi = new UserApi(); 
+export const userApi = new UserApi();

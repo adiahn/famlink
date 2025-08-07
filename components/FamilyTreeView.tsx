@@ -8,6 +8,9 @@ const { width, height } = Dimensions.get('window');
 interface FamilyMember {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
   relationship: string;
   birthYear: string;
   isDeceased: boolean;
@@ -19,6 +22,9 @@ interface FamilyMember {
   gender?: 'male' | 'female';
   spouse?: string;
   children?: string[];
+  isLinkedMember?: boolean;
+  sourceFamily?: string;
+  originalFamilyId?: string;
 }
 
 interface TreeNode {
@@ -32,6 +38,11 @@ interface TreeNode {
   children: TreeNode[];
   x?: number;
   y?: number;
+  avatarUrl?: string;
+  joinId?: string;
+  relationship?: string;
+  isLinkedMember?: boolean;
+  sourceFamily?: string;
 }
 
 interface FamilyTreeViewProps {
@@ -42,20 +53,33 @@ interface FamilyTreeViewProps {
 export default function FamilyTreeView({ familyMembers, onMemberSelect }: FamilyTreeViewProps) {
   const [treeData, setTreeData] = useState<TreeNode | null>(null);
 
-  // Find parents for the HTML generation (including mothers as potential wives)
-  const parents = familyMembers ? familyMembers.filter(member => 
-    member.relationship.toLowerCase().includes('father') || 
-    member.relationship.toLowerCase().includes('mother') ||
-    member.relationship.toLowerCase().includes('wife')
-  ) : [];
-
   useEffect(() => {
     console.log('FamilyTreeView received members:', familyMembers);
+    console.log('FamilyTreeView members count:', familyMembers?.length);
+    console.log('FamilyTreeView members data:', JSON.stringify(familyMembers, null, 2));
+    
     if (familyMembers && familyMembers.length > 0) {
+      // Log each member's name-related fields
+      familyMembers.forEach((member, index) => {
+        console.log(`Member ${index + 1}:`, {
+          id: member.id,
+          name: member.name,
+          fullName: member.fullName,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          relationship: member.relationship,
+          hasName: !!member.name,
+          hasFullName: !!member.fullName,
+          hasFirstName: !!member.firstName,
+          hasLastName: !!member.lastName
+        });
+      });
+      
       const tree = buildFamilyTree(familyMembers);
       console.log('Built tree data:', tree);
       setTreeData(tree);
     } else {
+      console.log('No family members, setting tree data to null');
       setTreeData(null);
     }
   }, [familyMembers]);
@@ -74,11 +98,26 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
       };
     }
     
+    // Debug: Log each member's properties
+    console.log('Raw members data:', members);
+    members.forEach((member, index) => {
+      console.log(`Member ${index + 1}:`, {
+        id: member.id,
+        name: member.name,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        relationship: member.relationship,
+        birthYear: member.birthYear,
+        hasName: !!member.name,
+        hasFirstName: !!member.firstName,
+        hasLastName: !!member.lastName
+      });
+    });
+    
     // Validate members have required properties
     const validMembers = members.filter(member => 
       member && 
       member.id && 
-      member.name && 
       member.relationship && 
       member.birthYear
     );
@@ -102,7 +141,8 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
     const parents = validMembers.filter(member => 
       member.relationship.toLowerCase().includes('father') || 
       member.relationship.toLowerCase().includes('mother') ||
-      member.relationship.toLowerCase().includes('wife')
+      member.relationship.toLowerCase().includes('wife') ||
+      member.relationship.toLowerCase().includes('parent')
     );
 
     // Find children (siblings, sons, daughters)
@@ -112,11 +152,53 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
       member.relationship.toLowerCase().includes('son') ||
       member.relationship.toLowerCase().includes('daughter') ||
       member.relationship.toLowerCase().includes('child') ||
-      member.relationship === 'Creator'
+      member.relationship.toLowerCase().includes('sibling') ||
+      member.relationship === 'Creator' ||
+      member.relationship === 'creator'
     );
+
+    // If no clear categorization, show all members at the same level
+    if (parents.length === 0 && children.length === 0) {
+      console.log('No clear parent/child categorization, showing all members at same level');
+      return {
+        id: 'root',
+        name: 'Family',
+        gender: 'male',
+        birthYear: '',
+        isDeceased: false,
+        children: validMembers.map(member => {
+          let displayName = member.name || member.fullName;
+          if (!displayName && (member.firstName || member.lastName)) {
+            displayName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
+          }
+          if (!displayName) {
+            displayName = member.relationship;
+          }
+          
+          return {
+            id: member.id,
+            name: displayName,
+            gender: member.gender || (member.relationship.toLowerCase().includes('father') || 
+                                     member.relationship.toLowerCase().includes('brother') || 
+                                     member.relationship.toLowerCase().includes('son') ? 'male' : 'female'),
+            birthYear: member.birthYear,
+            isDeceased: member.isDeceased,
+            deathYear: member.deathYear,
+            avatarUrl: member.avatarUrl,
+            joinId: member.joinId,
+            relationship: member.relationship,
+            isLinkedMember: member.isLinkedMember,
+            sourceFamily: member.sourceFamily,
+            children: []
+          };
+        })
+      };
+    }
 
     console.log('Parents found:', parents);
     console.log('Children found:', children);
+    console.log('All valid members:', validMembers);
+    console.log('All relationships:', validMembers.map(m => ({ name: m.name, relationship: m.relationship })));
 
     // Create parent nodes
     const parentNodes: TreeNode[] = parents.map(parent => ({
@@ -126,23 +208,70 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
       birthYear: parent.birthYear,
       isDeceased: parent.isDeceased,
       deathYear: parent.deathYear,
+      avatarUrl: parent.avatarUrl,
+      joinId: parent.joinId,
+      relationship: parent.relationship,
       children: []
     }));
 
-    // Create child nodes
-    const childNodes: TreeNode[] = children.map(child => ({
-      id: child.id,
-      name: child.name,
-      gender: (child.gender || (child.relationship.toLowerCase().includes('brother') || 
-                              child.relationship.toLowerCase().includes('son') ? 'male' : 'female')) as 'male' | 'female',
-      birthYear: child.birthYear,
-      isDeceased: child.isDeceased,
-      deathYear: child.deathYear,
-      children: []
-    }));
+
+
+    // Create child nodes with proper name generation
+    const childNodes = children.map(child => {
+      // Generate name from multiple possible sources
+      let displayName = child.name || child.fullName;
+      if (!displayName && (child.firstName || child.lastName)) {
+        displayName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
+      }
+      if (!displayName) {
+        displayName = child.relationship; // Only as last resort
+      }
+      
+      return {
+        id: child.id,
+        name: displayName,
+        gender: (child.gender || (child.relationship.toLowerCase().includes('brother') || 
+                                child.relationship.toLowerCase().includes('son') ? 'male' : 'female')) as 'male' | 'female',
+        birthYear: child.birthYear,
+        isDeceased: child.isDeceased,
+        deathYear: child.deathYear,
+        avatarUrl: child.avatarUrl,
+        joinId: child.joinId,
+        relationship: child.relationship,
+        isLinkedMember: child.isLinkedMember,
+        sourceFamily: child.sourceFamily,
+        children: []
+      };
+    });
 
     // If we have parents, create a proper hierarchical structure
     if (parents.length > 0) {
+      // Create parent nodes with proper name generation
+      const parentNodes = parents.map(parent => {
+        let displayName = parent.name || parent.fullName;
+        if (!displayName && (parent.firstName || parent.lastName)) {
+          displayName = `${parent.firstName || ''} ${parent.lastName || ''}`.trim();
+        }
+        if (!displayName) {
+          displayName = parent.relationship; // Only as last resort
+        }
+        
+        return {
+          id: parent.id,
+          name: displayName,
+          gender: (parent.gender || (parent.relationship.toLowerCase().includes('father') ? 'male' : 'female')) as 'male' | 'female',
+          birthYear: parent.birthYear,
+          isDeceased: parent.isDeceased,
+          deathYear: parent.deathYear,
+          avatarUrl: parent.avatarUrl,
+          joinId: parent.joinId,
+          relationship: parent.relationship,
+          isLinkedMember: parent.isLinkedMember,
+          sourceFamily: parent.sourceFamily,
+          children: []
+        };
+      });
+
       // Create a family couple node that contains both parents
       const familyCoupleNode: TreeNode = {
         id: 'family-couple',
@@ -167,17 +296,33 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
     }
 
     // Fallback: if no parents, show all members at same level
-    const allMembers = validMembers.map(member => ({
-      id: member.id,
-      name: member.name,
-      gender: member.gender || (member.relationship.toLowerCase().includes('father') || 
-                               member.relationship.toLowerCase().includes('brother') || 
-                               member.relationship.toLowerCase().includes('son') ? 'male' : 'female'),
-      birthYear: member.birthYear,
-      isDeceased: member.isDeceased,
-      deathYear: member.deathYear,
-      children: []
-    }));
+    const allMembers = validMembers.map(member => {
+      // Generate name from multiple possible sources
+      let displayName = member.name || member.fullName;
+      if (!displayName && (member.firstName || member.lastName)) {
+        displayName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
+      }
+      if (!displayName) {
+        displayName = member.relationship; // Only as last resort
+      }
+      
+      return {
+        id: member.id,
+        name: displayName,
+        gender: member.gender || (member.relationship.toLowerCase().includes('father') || 
+                                 member.relationship.toLowerCase().includes('brother') || 
+                                 member.relationship.toLowerCase().includes('son') ? 'male' : 'female'),
+        birthYear: member.birthYear,
+        isDeceased: member.isDeceased,
+        deathYear: member.deathYear,
+        avatarUrl: member.avatarUrl,
+        joinId: member.joinId,
+        relationship: member.relationship,
+        isLinkedMember: member.isLinkedMember,
+        sourceFamily: member.sourceFamily,
+        children: []
+      };
+    });
 
     return {
       id: 'root',
@@ -252,21 +397,55 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
             transform: scale(1.05);
           }
           
-          .node-card {
-            fill: white;
-            stroke: #e2e8f0;
+                     .node-card {
+             fill: rgba(255, 255, 255, 1);
+             stroke: rgba(0, 0, 0, 0.2);
+             stroke-width: 2;
+             rx: 20;
+             ry: 20;
+             filter: drop-shadow(0 6px 20px rgba(0,0,0,0.25)) drop-shadow(0 3px 10px rgba(0,0,0,0.15));
+             cursor: pointer;
+             transition: all 0.3s ease;
+           }
+           
+           .node-card:hover {
+             fill: rgba(255, 255, 255, 1);
+             stroke: rgba(0, 0, 0, 0.3);
+             transform: scale(1.03);
+             filter: drop-shadow(0 8px 25px rgba(0,0,0,0.3)) drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+           }
+          
+                     .node-card.male {
+             fill: rgba(255, 255, 255, 1);
+             stroke: rgba(0, 0, 0, 0.2);
+           }
+           
+           .node-card.male:hover {
+             fill: rgba(255, 255, 255, 1);
+             stroke: rgba(0, 0, 0, 0.3);
+           }
+           
+           .node-card.female {
+             fill: rgba(255, 255, 255, 1);
+             stroke: rgba(0, 0, 0, 0.2);
+           }
+           
+                     .node-card.female:hover {
+            fill: rgba(255, 255, 255, 1);
+            stroke: rgba(0, 0, 0, 0.3);
+          }
+          
+          .node-card.linked {
+            fill: rgba(236, 254, 255, 1);
+            stroke: #0891b2;
             stroke-width: 2;
-            rx: 8;
-            ry: 8;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+            stroke-dasharray: 5,5;
           }
           
-          .node-card.male {
-            stroke: #3b82f6;
-          }
-          
-          .node-card.female {
-            stroke: #f59e0b;
+          .node-card.linked:hover {
+            fill: rgba(207, 250, 254, 1);
+            stroke: #0e7490;
+            stroke-width: 3;
           }
           
           .node-card.selected {
@@ -283,18 +462,51 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
             fill: #f59e0b;
           }
           
-          .name-text {
-            font-size: 12px;
-            font-weight: 600;
-            fill: #1f2937;
-            text-anchor: middle;
-          }
+                     .name-text {
+             font-size: 15px;
+             font-weight: 800;
+             fill: #111827;
+             text-anchor: middle;
+             letter-spacing: 0.025em;
+           }
           
-          .year-text {
-            font-size: 10px;
-            fill: #6b7280;
-            text-anchor: middle;
-          }
+                     .year-text {
+             font-size: 12px;
+             fill: #4b5563;
+             text-anchor: middle;
+             font-weight: 600;
+           }
+           
+           .profile-picture {
+             rx: 25;
+             ry: 25;
+             filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+           }
+           
+           .id-text {
+             font-size: 10px;
+             fill: #6b7280;
+             text-anchor: middle;
+             font-family: 'Courier New', monospace;
+             font-weight: 700;
+             letter-spacing: 0.05em;
+           }
+           
+           .source-family-text {
+             font-size: 9px;
+             fill: #0891b2;
+             text-anchor: middle;
+             font-weight: 600;
+             font-style: italic;
+           }
+           
+           .relationship-text {
+             font-size: 11px;
+             fill: #374151;
+             text-anchor: middle;
+             font-weight: 600;
+             text-transform: capitalize;
+           }
           
           .link {
             fill: none;
@@ -313,6 +525,163 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
             stroke: #f59e0b;
             stroke-width: 2;
           }
+          
+          .relationship-indicator {
+            stroke-dasharray: 3,3;
+            transition: opacity 0.3s ease;
+          }
+          
+          .relationship-indicator:hover {
+            opacity: 0.8 !important;
+          }
+          
+          .relationship-dot {
+            transition: all 0.3s ease;
+          }
+          
+                     .relationship-dot:hover {
+             r: 4;
+             opacity: 1 !important;
+           }
+           
+           .modal-overlay {
+             position: fixed;
+             top: 0;
+             left: 0;
+             width: 100%;
+             height: 100%;
+             background: rgba(0, 0, 0, 0.7);
+             display: flex;
+             justify-content: center;
+             align-items: center;
+             z-index: 10000;
+             backdrop-filter: blur(5px);
+           }
+           
+           .modal-content {
+             background: rgba(255, 255, 255, 0.95);
+             border-radius: 20px;
+             padding: 30px;
+             max-width: 400px;
+             width: 90%;
+             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+             backdrop-filter: blur(20px);
+             border: 1px solid rgba(255, 255, 255, 0.3);
+           }
+           
+           .modal-header {
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             margin-bottom: 20px;
+           }
+           
+           .modal-title {
+             font-size: 24px;
+             font-weight: 700;
+             color: #1f2937;
+             margin: 0;
+           }
+           
+           .modal-close {
+             background: none;
+             border: none;
+             font-size: 24px;
+             cursor: pointer;
+             color: #6b7280;
+             padding: 5px;
+             border-radius: 50%;
+             transition: all 0.2s ease;
+           }
+           
+           .modal-close:hover {
+             background: rgba(0, 0, 0, 0.1);
+             color: #374151;
+           }
+           
+           .modal-profile-pic {
+             width: 120px;
+             height: 120px;
+             border-radius: 60px;
+             margin: 0 auto 20px;
+             display: block;
+             object-fit: cover;
+             border: 3px solid rgba(255, 255, 255, 0.5);
+             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+           }
+           
+           .modal-details {
+             margin-bottom: 20px;
+           }
+           
+           .detail-row {
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             padding: 12px 0;
+             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+           }
+           
+           .detail-label {
+             font-weight: 600;
+             color: #6b7280;
+             font-size: 14px;
+           }
+           
+           .detail-value {
+             font-weight: 500;
+             color: #1f2937;
+             font-size: 14px;
+             text-align: right;
+           }
+           
+           .id-section {
+             background: rgba(59, 130, 246, 0.1);
+             border-radius: 12px;
+             padding: 15px;
+             margin-top: 20px;
+             border: 1px solid rgba(59, 130, 246, 0.2);
+           }
+           
+           .id-label {
+             font-weight: 600;
+             color: #3b82f6;
+             font-size: 12px;
+             margin-bottom: 8px;
+           }
+           
+           .id-value {
+             font-family: 'Courier New', monospace;
+             font-size: 16px;
+             font-weight: 700;
+             color: #1f2937;
+             background: rgba(255, 255, 255, 0.8);
+             padding: 8px 12px;
+             border-radius: 8px;
+             border: 1px solid rgba(0, 0, 0, 0.1);
+             margin-bottom: 10px;
+           }
+           
+           .copy-btn {
+             background: #3b82f6;
+             color: white;
+             border: none;
+             padding: 8px 16px;
+             border-radius: 8px;
+             font-size: 12px;
+             font-weight: 600;
+             cursor: pointer;
+             transition: all 0.2s ease;
+           }
+           
+           .copy-btn:hover {
+             background: #2563eb;
+             transform: translateY(-1px);
+           }
+           
+           .copy-btn:active {
+             transform: translateY(0);
+           }
           
           .zoom-controls {
             position: fixed;
@@ -354,11 +723,107 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
           <div id="tree"></div>
         </div>
         
+        <!-- Member Details Modal -->
+        <div id="memberModal" class="modal-overlay" style="display: none;">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2 class="modal-title" id="modalTitle">Member Details</h2>
+              <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <img id="modalProfilePic" class="modal-profile-pic" src="" alt="Profile Picture">
+            <div class="modal-details">
+              <div class="detail-row">
+                <span class="detail-label">Full Name:</span>
+                <span class="detail-value" id="modalFullName">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Relationship:</span>
+                <span class="detail-value" id="modalRelationship">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Birth Year:</span>
+                <span class="detail-value" id="modalBirthYear">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Address:</span>
+                <span class="detail-value" id="modalAddress">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Phone:</span>
+                <span class="detail-value" id="modalPhone">-</span>
+              </div>
+            </div>
+            <div class="id-section">
+              <div class="id-label">Unique ID</div>
+              <div class="id-value" id="modalId">-</div>
+              <button class="copy-btn" onclick="copyId()">Copy ID</button>
+            </div>
+          </div>
+        </div>
+        
                  <script>
            const data = ${JSON.stringify(data)};
            const parents = ${JSON.stringify(parents)};
            let currentZoom = 1;
            let selectedNode = null;
+           let currentMemberData = null;
+           
+           // Modal functions
+           function showMemberDetails(memberData) {
+             currentMemberData = memberData;
+             
+             // Update modal content
+             document.getElementById('modalTitle').textContent = memberData.name;
+             document.getElementById('modalFullName').textContent = memberData.name;
+             document.getElementById('modalRelationship').textContent = memberData.relationship || 'N/A';
+             document.getElementById('modalBirthYear').textContent = memberData.birthYear || 'N/A';
+             document.getElementById('modalAddress').textContent = 'Address not available'; // Placeholder
+             document.getElementById('modalPhone').textContent = 'Phone not available'; // Placeholder
+             document.getElementById('modalId').textContent = memberData.joinId || 'N/A';
+             
+             // Update profile picture
+             const profilePic = document.getElementById('modalProfilePic');
+             if (memberData.avatarUrl) {
+               profilePic.src = memberData.avatarUrl;
+             } else {
+               profilePic.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDEyMCAxMjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxjaXJjbGUgY3g9IjYwIiBjeT0iNjAiIHI9IjYwIiBmaWxsPSIjOUNBM0FGIi8+CjxzdmcgeD0iMzAiIHk9IjMwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPgo8cGF0aCBkPSJNMTIgMTJjMi4yMSAwIDQtMS43OSA0LTQtMS43OS00LTQtNC00IDQgMCAyLjIxIDEuNzkgNCA0IDR6bTAgMmMtMi42NyAwLTggMS4zNC04IDR2MmgxNnYtMmMwLTIuNjYtNS4zMy00LTgtNHoiLz4KPC9zdmc+Cjwvc3ZnPgo=';
+             }
+             
+             // Show modal
+             document.getElementById('memberModal').style.display = 'flex';
+           }
+           
+           function closeModal() {
+             document.getElementById('memberModal').style.display = 'none';
+             currentMemberData = null;
+           }
+           
+           function copyId() {
+             if (currentMemberData && currentMemberData.joinId) {
+               navigator.clipboard.writeText(currentMemberData.joinId).then(function() {
+                 const copyBtn = document.querySelector('.copy-btn');
+                 const originalText = copyBtn.textContent;
+                 copyBtn.textContent = 'Copied!';
+                 copyBtn.style.background = '#10b981';
+                 
+                 setTimeout(function() {
+                   copyBtn.textContent = originalText;
+                   copyBtn.style.background = '#3b82f6';
+                 }, 2000);
+               }).catch(function(err) {
+                 console.error('Failed to copy: ', err);
+                 alert('Failed to copy ID to clipboard');
+               });
+             }
+           }
+           
+           // Close modal when clicking outside
+           document.addEventListener('click', function(event) {
+             const modal = document.getElementById('memberModal');
+             if (event.target === modal) {
+               closeModal();
+             }
+           });
           
                      // Set up the tree layout
            const margin = { top: 50, right: 50, bottom: 50, left: 50 };
@@ -373,13 +838,13 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
              // Use a cluster layout for better horizontal arrangement
              const cluster = d3.cluster()
                .size([containerWidth, containerHeight])
-               .nodeSize([120, 200]);
+               .nodeSize([320, 300]);
              cluster(root);
            } else {
              // Use tree layout for hierarchical structure
              const tree = d3.tree()
                .size([containerWidth, containerHeight])
-               .nodeSize([120, 200]);
+               .nodeSize([320, 300]);
              tree(root);
            }
           
@@ -420,7 +885,7 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
               // Calculate positions for parents within the couple node
               const coupleX = familyCoupleNode.x;
               const coupleY = familyCoupleNode.y;
-              const parentSpacing = 120; // Space between parents
+              const parentSpacing = 320; // Space between parents
               
               // Sort parents: Father first, then mothers/wives in order
               const father = parents.find(p => p.relationship.toLowerCase().includes('father'));
@@ -461,54 +926,85 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
                 const cardClass = isMale ? 'male' : 'female';
                 const iconClass = isMale ? 'male' : 'female';
                 
-                // Draw parent card
-                g.append("rect")
-                  .attr("class", \`node-card \${cardClass}\`)
-                  .attr("x", parentX - 50)
-                  .attr("y", parentY - 30)
-                  .attr("width", 100)
-                  .attr("height", 60);
-                
-                // Draw gender icon
-                g.append("circle")
-                  .attr("class", \`gender-icon \${iconClass}\`)
-                  .attr("cx", parentX)
-                  .attr("cy", parentY - 15)
-                  .attr("r", 8);
-                
-                // Draw name
-                g.append("text")
-                  .attr("class", "name-text")
-                  .attr("x", parentX)
-                  .attr("y", parentY + 5)
-                  .text(parent.name.length > 12 ? parent.name.substring(0, 12) + '...' : parent.name);
-                
-                // Draw years
-                g.append("text")
-                  .attr("class", "year-text")
-                  .attr("x", parentX)
-                  .attr("y", parentY + 20)
-                  .text(parent.birthYear);
+                               // Draw parent card (wider for better visibility)
+               g.append("rect")
+                 .attr("class", \`node-card \${cardClass}\`)
+                 .attr("x", parentX - 80)
+                 .attr("y", parentY - 70)
+                 .attr("width", 160)
+                 .attr("height", 140);
+               
+               // Draw profile picture (always show image, use placeholder if no avatar)
+               const profileImage = g.append("image")
+                 .attr("class", "profile-picture")
+                 .attr("x", parentX - 30)
+                 .attr("y", parentY - 65)
+                 .attr("width", 60)
+                 .attr("height", 60)
+                 .attr("href", parent.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPHN2ZyB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0xMiAxMmMyLjIxIDAgNC0xLjc5IDQtNHMtMS43OS00LTQtNC00IDEuNzktNCA0IDEuNzkgNCA0IDR6bTAgMmMtMi42NyAwLTggMS4zNC04IDR2MmgxNnYtMmMwLTIuNjYtNS4zMy00LTgtNHoiLz4KPC9zdmc+Cjwvc3ZnPgo=');
+               
+               // Add click handler for the profile picture
+               profileImage.on("click", function(event) {
+                 event.stopPropagation();
+                 showMemberDetails(parent);
+               });
+               
+               // Draw name (with more space for full name)
+               g.append("text")
+                 .attr("class", "name-text")
+                 .attr("x", parentX)
+                 .attr("y", parentY + 15)
+                 .text(parent.name.length > 20 ? parent.name.substring(0, 20) + '...' : parent.name);
+               
+               // Draw relationship
+               g.append("text")
+                 .attr("class", "relationship-text")
+                 .attr("x", parentX)
+                 .attr("y", parentY + 35)
+                 .text(parent.relationship);
+               
+               // Draw years
+               g.append("text")
+                 .attr("class", "year-text")
+                 .attr("x", parentX)
+                 .attr("y", parentY + 50)
+                 .text(parent.birthYear);
+               
+               // Draw unique ID
+               if (parent.joinId) {
+                 g.append("text")
+                   .attr("class", "id-text")
+                   .attr("x", parentX)
+                   .attr("y", parentY + 65)
+                   .text('ID: ' + parent.joinId.substring(0, 6));
+               }
               });
               
-              // Draw marriage lines between consecutive parents
-              for (let i = 0; i < allParents.length - 1; i++) {
-                const currentX = startX + i * parentSpacing;
-                const nextX = startX + (i + 1) * parentSpacing;
-                
-                g.append("path")
-                  .attr("class", "marriage-line")
-                  .attr("d", \`M\${currentX},\${coupleY} L\${nextX},\${coupleY}\`);
-                
-                // Add marriage symbol in the middle
-                const midX = (currentX + nextX) / 2;
-                
-                g.append("ellipse")
-                  .attr("class", "marriage-symbol")
-                  .attr("cx", midX)
-                  .attr("cy", coupleY - 10)
-                  .attr("rx", 8)
-                  .attr("ry", 4);
+              // Draw simple relationship indicators between father and wives
+              if (father && wives.length > 0) {
+                wives.forEach((wife, index) => {
+                  const fatherX = startX; // Father is always first
+                  const wifeX = startX + (index + 1) * parentSpacing;
+                  
+                  // Draw a subtle connecting line
+                  g.append("path")
+                    .attr("class", "relationship-indicator")
+                    .attr("d", \`M\${fatherX},\${coupleY} L\${wifeX},\${coupleY}\`)
+                    .attr("stroke", "#e5e7eb")
+                    .attr("stroke-width", 1)
+                    .attr("fill", "none")
+                    .attr("opacity", 0.6);
+                  
+                  // Add a small relationship dot in the middle
+                  const midX = (fatherX + wifeX) / 2;
+                  g.append("circle")
+                    .attr("class", "relationship-dot")
+                    .attr("cx", midX)
+                    .attr("cy", coupleY)
+                    .attr("r", 3)
+                    .attr("fill", "#9ca3af")
+                    .attr("opacity", 0.7);
+                });
               }
             }
           
@@ -535,38 +1031,69 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
                }));
              });
           
-          // Draw node cards
+          // Draw node cards (wider for better visibility)
           nodes.append("rect")
-            .attr("class", d => \`node-card \${d.data.gender}\`)
-            .attr("x", -50)
-            .attr("y", -30)
-            .attr("width", 100)
-            .attr("height", 60);
+            .attr("class", d => \`node-card \${d.data.gender}\${d.data.isLinkedMember ? ' linked' : ''}\`)
+            .attr("x", -80)
+            .attr("y", -70)
+            .attr("width", 160)
+            .attr("height", 140);
           
-          // Draw gender icons
-          nodes.append("circle")
-            .attr("class", d => \`gender-icon \${d.data.gender}\`)
-            .attr("cx", 0)
-            .attr("cy", -15)
-            .attr("r", 8);
-          
-          // Draw names
-          nodes.append("text")
-            .attr("class", "name-text")
-            .attr("y", 5)
-            .text(d => d.data.name.length > 12 ? d.data.name.substring(0, 12) + '...' : d.data.name);
-          
-          // Draw years
-          nodes.append("text")
-            .attr("class", "year-text")
-            .attr("y", 20)
-            .text(d => {
-              let text = d.data.birthYear;
-              if (d.data.isDeceased && d.data.deathYear) {
-                text += ' - ' + d.data.deathYear;
-              }
-              return text;
+                                // Draw profile pictures (always show image, use placeholder if no avatar)
+            nodes.each(function(d) {
+              const node = d3.select(this);
+              const data = d.data;
+              
+                             const profileImage = node.append("image")
+                 .attr("class", "profile-picture")
+                 .attr("x", -30)
+                 .attr("y", -65)
+                 .attr("width", 60)
+                 .attr("height", 60)
+                 .attr("href", data.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPHN2ZyB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0xMiAxMmMyLjIxIDAgNC0xLjc5IDQtNHMtMS43OS00LTQtNC00IDEuNzktNCA0IDEuNzkgNCA0IDR6bTAgMmMtMi42NyAwLTggMS4zNC04IDR2MmgxNnYtMmMwLTIuNjYtNS4zMy00LTgtNHoiLz4KPC9zdmc+Cjwvc3ZnPgo=');
+              
+              // Add click handler for the profile picture
+              profileImage.on("click", function(event) {
+                event.stopPropagation();
+                showMemberDetails(data);
+              });
             });
+          
+                                // Draw names (with more space for full name)
+           nodes.append("text")
+             .attr("class", "name-text")
+             .attr("y", 15)
+             .text(d => d.data.name.length > 20 ? d.data.name.substring(0, 20) + '...' : d.data.name);
+           
+           // Draw relationship
+           nodes.append("text")
+             .attr("class", "relationship-text")
+             .attr("y", 35)
+             .text(d => d.data.relationship || '');
+           
+           // Draw years
+           nodes.append("text")
+             .attr("class", "year-text")
+             .attr("y", 50)
+             .text(d => {
+               let text = d.data.birthYear;
+               if (d.data.isDeceased && d.data.deathYear) {
+                 text += ' - ' + d.data.deathYear;
+               }
+               return text;
+             });
+           
+           // Draw unique IDs
+           nodes.append("text")
+             .attr("class", "id-text")
+             .attr("y", 65)
+             .text(d => d.data.joinId ? 'ID: ' + d.data.joinId.substring(0, 6) : '');
+           
+           // Draw source family for linked members
+           nodes.append("text")
+             .attr("class", "source-family-text")
+             .attr("y", 80)
+             .text(d => d.data.isLinkedMember && d.data.sourceFamily ? \`From: \${d.data.sourceFamily}\` : '');
           
           // Zoom functions
           function zoomIn() {
@@ -613,7 +1140,11 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
   return (
     <View style={styles.container}>
                    <WebView
-        source={{ html: generateHTML(treeData, parents || []) }}
+        source={{ html: generateHTML(treeData, familyMembers ? familyMembers.filter(member => 
+          member.relationship.toLowerCase().includes('father') || 
+          member.relationship.toLowerCase().includes('mother') ||
+          member.relationship.toLowerCase().includes('wife')
+        ) : []) }}
         style={styles.webview}
         javaScriptEnabled={true}
         domStorageEnabled={true}
