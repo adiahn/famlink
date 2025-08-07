@@ -15,6 +15,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useFamilyStore } from '../../store/familyStore';
 import { Colors } from '../../constants/Colors';
@@ -266,18 +267,10 @@ export default function TreeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Family Tree</Text>
-        <View style={styles.headerButtons}>
-          <Pressable onPress={loadFamilyData} style={styles.refreshButton}>
-            <RefreshCw size={20} color={Colors.primary} />
-          </Pressable>
-          <Pressable style={styles.addButton} onPress={() => setShowAddModal(true)}>
-            <Plus size={24} color={Colors.white} />
-          </Pressable>
-                  </View>
-              </View>
+      </View>
 
       <View style={styles.content}>
         <FamilyTreeView 
@@ -499,7 +492,7 @@ export default function TreeScreen() {
           </ScrollView>
         </View>
       </Modal>
-      </View>
+    </SafeAreaView>
   );
 }
 
@@ -510,36 +503,14 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: Colors.text,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  refreshButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  addButton: {
-    backgroundColor: Colors.primary,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
     flex: 1,
@@ -549,6 +520,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 20,
   },
   loadingText: {
     fontSize: 18,
@@ -559,6 +531,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    paddingTop: 20,
   },
   errorText: {
     fontSize: 16,
@@ -571,6 +544,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    paddingTop: 20,
   },
   emptyText: {
     fontSize: 16,
