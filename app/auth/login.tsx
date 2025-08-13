@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform,
+  Dimensions, StatusBar, Pressable, TextInput
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
-import Card from '../../components/ui/Card';
 import { Colors } from '../../constants/Colors';
-import { Eye, EyeOff, LogIn, UserPlus, ArrowLeft } from 'lucide-react-native';
+import { Eye, EyeOff, LogIn, ArrowLeft, Phone, Lock } from 'lucide-react-native';
+
+const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const { signIn, isLoading, error, clearError } = useAuthStore();
@@ -57,95 +57,106 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Button
-            variant="ghost"
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <ArrowLeft size={24} color={Colors.primary} />
-          </Button>
-        </View>
-
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      
+      <KeyboardAvoidingView 
+        style={styles.keyboardContainer} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View style={styles.content}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>FamLink</Text>
-            <Text style={styles.tagline}>Welcome back to your family</Text>
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable 
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft size={24} color="#374151" />
+            </Pressable>
           </View>
 
-          <Card style={styles.formCard}>
-            <Text style={styles.title}>Sign In</Text>
-            <Text style={styles.subtitle}>
-              Enter your phone number and password to access your family tree
-            </Text>
-
-            <View style={styles.form}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Phone Number</Text>
-                <Input
-                  placeholder="Enter your phone number"
-                  value={formData.phone}
-                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                  keyboardType="phone-pad"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+          {/* Main Content */}
+          <View style={styles.mainContent}>
+            {/* Login Form */}
+            <View style={styles.formContainer}>
+              <View style={styles.formHeader}>
+                <Text style={styles.formTitle}>Sign In</Text>
+                <Text style={styles.formSubtitle}>Enter your credentials to continue</Text>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.passwordContainer}>
-                  <Input
-                    placeholder="Enter your password"
-                    value={formData.password}
-                    onChangeText={(text) => setFormData({ ...formData, password: text })}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={styles.passwordInput}
-                  />
-                  <Button
-                    title=""
-                    variant="ghost"
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeButton}
-                    leftIcon={
-                      showPassword ? (
-                        <EyeOff size={20} color={Colors.gray} />
-                      ) : (
-                        <Eye size={20} color={Colors.gray} />
-                      )
-                    }
-                  />
+              <View style={styles.form}>
+                {/* Phone Input */}
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.label}>Phone Number</Text>
+                  <View style={styles.inputContainer}>
+                    <Phone size={20} color="#9ca3af" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Enter your phone number"
+                      placeholderTextColor="#9ca3af"
+                      value={formData.phone}
+                      onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                      keyboardType="phone-pad"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
                 </View>
+
+                {/* Password Input */}
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.label}>Password</Text>
+                  <View style={styles.inputContainer}>
+                    <Lock size={20} color="#9ca3af" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Enter your password"
+                      placeholderTextColor="#9ca3af"
+                      value={formData.password}
+                      onChangeText={(text) => setFormData({ ...formData, password: text })}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <Pressable 
+                      style={styles.eyeButton}
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff size={20} color="#9ca3af" />
+                      ) : (
+                        <Eye size={20} color="#9ca3af" />
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Sign In Button */}
+                <Pressable 
+                  style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
+                  onPress={handleSignIn}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.signInButtonText}>
+                    {isLoading ? 'Signing In...' : 'Sign In'}
+                  </Text>
+                </Pressable>
               </View>
-
-              <Button
-                title={isLoading ? 'Signing In...' : 'Sign In'}
-                onPress={handleSignIn}
-                disabled={isLoading}
-                style={styles.signInButton}
-                leftIcon={<LogIn size={20} color="#ffffff" />}
-              />
             </View>
-          </Card>
 
-          <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>
-              Don't have an account?{' '}
-              <Text style={styles.signUpLink} onPress={handleSignUp}>
-                Sign up
+            {/* Sign Up Link */}
+            <View style={styles.signUpSection}>
+              <Text style={styles.signUpText}>
+                Don't have an account?{' '}
+                <Text style={styles.signUpLink} onPress={handleSignUp}>
+                  Sign up
+                </Text>
               </Text>
-            </Text>
+            </View>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -154,90 +165,129 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
+  keyboardContainer: {
+    flex: 1,
   },
   content: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  mainContent: {
+    flex: 1,
     paddingTop: 40,
   },
-  logoContainer: {
+  formContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+  },
+  formHeader: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 16,
-    color: Colors.gray,
-    textAlign: 'center',
-  },
-  formCard: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.dark,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.gray,
-    textAlign: 'center',
     marginBottom: 32,
-    lineHeight: 20,
+  },
+  formTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  formSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '400',
   },
   form: {
-    gap: 20,
+    gap: 24,
   },
-  inputGroup: {
+  inputWrapper: {
     gap: 8,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.dark,
+    fontWeight: '500',
+    color: '#374151',
   },
-  passwordContainer: {
-    position: 'relative',
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
-  passwordInput: {
-    paddingRight: 50,
+  inputIcon: {
+    marginRight: 12,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
+    paddingVertical: 16,
   },
   eyeButton: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    padding: 0,
+    padding: 8,
   },
   signInButton: {
-    marginTop: 8,
-  },
-  signUpContainer: {
     alignItems: 'center',
-    marginTop: 24,
+    justifyContent: 'center',
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginTop: 8,
+    shadowColor: '#2563eb',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  signInButtonDisabled: {
+    backgroundColor: '#94a3b8',
+    shadowOpacity: 0.1,
+  },
+  signInButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  signUpSection: {
+    alignItems: 'center',
+    marginTop: 32,
   },
   signUpText: {
-    fontSize: 16,
-    color: Colors.gray,
-    textAlign: 'center',
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '400',
   },
   signUpLink: {
-    color: Colors.primary,
+    color: '#2563eb',
     fontWeight: '600',
     textDecorationLine: 'underline',
   },

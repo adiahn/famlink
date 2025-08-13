@@ -23,6 +23,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
 import FamilyTreeView from '../../components/FamilyTreeView';
+import FamilyCreationFlow from '../../components/FamilyCreationFlow';
 import {
   Plus,
   ChevronDown,
@@ -48,6 +49,7 @@ interface AddMemberForm {
   isDeceased: boolean;
   deathYear: string;
   avatar?: string;
+  motherId?: string; // New field for mother selection
 }
 
 interface FamilyNode {
@@ -78,12 +80,15 @@ export default function TreeScreen() {
     getMyFamily, 
     addMember, 
     generateJoinId,
+    initializeFamilyCreation,
+    setupParents,
     setSelectedMember, 
     toggleExpandedNode 
   } = useFamilyStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showJoinIdModal, setShowJoinIdModal] = useState(false);
+  const [showFamilyCreationFlow, setShowFamilyCreationFlow] = useState(false);
   const [selectedMemberForJoinId, setSelectedMemberForJoinId] = useState<any>(null);
   const [generatedJoinId, setGeneratedJoinId] = useState<string>('');
   const [formData, setFormData] = useState<AddMemberForm>({
@@ -105,12 +110,75 @@ export default function TreeScreen() {
     if (accessToken) {
       const result = await getMyFamily(accessToken);
       console.log('Load family result:', result);
+      
+      // If the result is successful but no family exists, that's normal for new users
+      if (result.success && result.message === 'No family found') {
+        console.log('No family found - showing empty state for new user');
+      }
     }
   };
 
   const handleAddMember = async () => {
-    if (!formData.firstName || !formData.lastName || !formData.relationship || !formData.birthYear) {
-      Alert.alert('Missing Information', 'Please fill in all required fields.');
+    // Enhanced validation based on API specification
+    const errors: string[] = [];
+
+    // Required field validation
+    if (!formData.firstName?.trim()) {
+      errors.push('First name is required');
+    } else if (formData.firstName.trim().length > 100) {
+      errors.push('First name must be 100 characters or less');
+    }
+
+    if (!formData.lastName?.trim()) {
+      errors.push('Last name is required');
+    } else if (formData.lastName.trim().length > 100) {
+      errors.push('Last name must be 100 characters or less');
+    }
+
+    if (!formData.relationship?.trim()) {
+      errors.push('Relationship is required');
+    } else if (formData.relationship.trim().length > 50) {
+      errors.push('Relationship must be 50 characters or less');
+    }
+
+    if (!formData.birthYear?.trim()) {
+      errors.push('Birth year is required');
+    } else {
+      const birthYear = parseInt(formData.birthYear);
+      const currentYear = new Date().getFullYear();
+      if (isNaN(birthYear) || birthYear < 1900 || birthYear > currentYear) {
+        errors.push('Birth year must be a valid 4-digit year between 1900 and current year');
+      }
+    }
+
+    // Death year validation (required if deceased)
+    if (formData.isDeceased) {
+      if (!formData.deathYear?.trim()) {
+        errors.push('Death year is required when marking as deceased');
+      } else {
+        const deathYear = parseInt(formData.deathYear);
+        const birthYear = parseInt(formData.birthYear);
+        const currentYear = new Date().getFullYear();
+        
+        if (isNaN(deathYear) || deathYear < 1900 || deathYear > currentYear) {
+          errors.push('Death year must be a valid 4-digit year between 1900 and current year');
+        } else if (deathYear < birthYear) {
+          errors.push('Death year cannot be before birth year');
+        }
+      }
+    }
+
+    // Mother ID validation for children
+    const isAddingChild = formData.relationship.toLowerCase().includes('son') ||
+                         formData.relationship.toLowerCase().includes('daughter') ||
+                         formData.relationship.toLowerCase().includes('child');
+    
+    if (isAddingChild && !formData.motherId) {
+      errors.push('Mother selection is required when adding a child');
+    }
+
+    if (errors.length > 0) {
+      Alert.alert('Validation Error', errors.join('\n'));
       return;
     }
 
@@ -156,8 +224,8 @@ export default function TreeScreen() {
     }
 
     // Auto-assign wife number if adding a wife
-    let finalRelationship = formData.relationship;
-    if (formData.relationship.toLowerCase().includes('wife')) {
+    let finalRelationship = formData.relationship.trim();
+    if (finalRelationship.toLowerCase().includes('wife')) {
       const existingWives = family.members.filter(member =>
         member.relationship.toLowerCase().includes('wife')
       );
@@ -166,8 +234,14 @@ export default function TreeScreen() {
     }
 
     const memberData = {
-      ...formData,
-      relationship: finalRelationship
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      relationship: finalRelationship,
+      birthYear: formData.birthYear.trim(),
+      isDeceased: formData.isDeceased,
+      deathYear: formData.isDeceased ? formData.deathYear.trim() : undefined,
+      avatar: formData.avatar ? formData.avatar as any : undefined,
+      motherId: formData.motherId // Include mother ID for children
     };
 
     const result = await addMember(family.id, memberData, accessToken);
@@ -194,6 +268,7 @@ export default function TreeScreen() {
       birthYear: '',
       isDeceased: false,
       deathYear: '',
+      motherId: undefined,
     });
   };
 
@@ -237,7 +312,7 @@ export default function TreeScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.primary[600]} />
         <Text style={styles.loadingText}>Loading family tree...</Text>
           </View>
     );
@@ -248,21 +323,307 @@ export default function TreeScreen() {
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
         <Pressable style={styles.retryButton} onPress={loadFamilyData}>
-          <Text style={{ color: Colors.white }}>Retry</Text>
+          <Text style={{ color: Colors.text.white }}>Retry</Text>
         </Pressable>
       </View>
     );
   }
 
-  if (!family || !family.members || family.members.length === 0) {
+  if (!family) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No family members found</Text>
-        <Text style={styles.debugText}>Add your first family member to get started</Text>
-        <Pressable style={styles.retryButton} onPress={loadFamilyData}>
-          <Text style={{ color: Colors.white }}>Refresh</Text>
-        </Pressable>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Family Tree</Text>
+        </View>
+        
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Welcome to FamTree!</Text>
+          <Text style={styles.debugText}>Create your family tree to get started</Text>
+          <Button
+            title="Create Family Tree"
+            onPress={() => setShowFamilyCreationFlow(true)}
+            fullWidth
+            style={styles.createButton}
+          />
+        </View>
+        
+        {/* Family Creation Flow Modal */}
+        <FamilyCreationFlow
+          visible={showFamilyCreationFlow}
+          onClose={() => setShowFamilyCreationFlow(false)}
+          onComplete={(familyId) => {
+            setShowFamilyCreationFlow(false);
+            loadFamilyData(); // Reload family data after creation
+          }}
+          onInitializeFamily={async (type, familyName) => {
+            try {
+              if (!accessToken) {
+                return { success: false, message: 'Authentication required' };
+              }
+              console.log('Initializing family creation with type:', type, 'familyName:', familyName);
+              const result = await initializeFamilyCreation(familyName, type, accessToken);
+              console.log('Initialize family creation result:', result);
+              return result;
+            } catch (error) {
+              console.error('Initialize family creation error:', error);
+              return { success: false, message: 'Failed to initialize family creation' };
+            }
+          }}
+          onSetupParents={async (familyId, fatherData, mothersData) => {
+            try {
+              if (!accessToken) {
+                return { success: false, message: 'Authentication required' };
+              }
+              const result = await setupParents(familyId, fatherData, mothersData, accessToken);
+              return result;
+            } catch (error) {
+              return { success: false, message: 'Failed to setup parents' };
+            }
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // If family exists but has no members, show a different message
+  if (family && (!family.members || family.members.length === 0)) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Family Tree</Text>
+        </View>
+        
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Family Created Successfully!</Text>
+          <Text style={styles.debugText}>Your family "{family.name}" has been created. Add your first family member to get started.</Text>
+          <Button
+            title="Add First Member"
+            onPress={() => setShowAddModal(true)}
+            fullWidth
+            style={styles.createButton}
+          />
+          <Button
+            title="Restart Family Creation"
+            onPress={() => setShowFamilyCreationFlow(true)}
+            variant="outline"
+            fullWidth
+            style={styles.createButton}
+          />
+        </View>
+        
+        {/* Add Member Modal */}
+        <Modal
+          visible={showAddModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Family Member</Text>
+              <Pressable style={styles.closeButton} onPress={() => setShowAddModal(false)}>
+                <X size={24} color={Colors.text} />
+              </Pressable>
+            </View>
+            
+            <View style={styles.modalContent}>
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+              >
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {/* Avatar Section */}
+                  <View style={styles.avatarSection}>
+                    <View style={styles.avatarContainer}>
+                      <Pressable style={styles.avatarButton} onPress={handleTakePicture}>
+                        {formData.avatar ? (
+                          <Image source={{ uri: formData.avatar }} style={styles.selectedAvatar} />
+                        ) : (
+                          <View style={styles.avatarPlaceholder}>
+                            <Camera size={32} color="#94a3b8" />
+                            <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                      {!formData.avatar && (
+                        <View style={styles.avatarOverlay}>
+                          <Text style={styles.avatarOverlayText}>Tap to upload</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.avatarLabel}>Profile picture (optional)</Text>
+                  </View>
+
+                  {/* Form Fields */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>First Name *</Text>
+                    <Input
+                      value={formData.firstName}
+                      onChangeText={(text) => setFormData({ ...formData, firstName: text })}
+                      placeholder="Enter first name"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Last Name *</Text>
+                    <Input
+                      value={formData.lastName}
+                      onChangeText={(text) => setFormData({ ...formData, lastName: text })}
+                      placeholder="Enter last name"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Relationship *</Text>
+                    <Input
+                      value={formData.relationship}
+                      onChangeText={(text) => setFormData({ ...formData, relationship: text })}
+                      placeholder="e.g., Father, Mother, Brother, Sister"
+                    />
+                    
+                    {/* Quick relationship buttons */}
+                    <View style={styles.quickRelationships}>
+                      <Text style={styles.quickRelationshipsLabel}>Quick select:</Text>
+                      <View style={styles.relationshipButtons}>
+                        {['Father', 'Mother', 'Brother', 'Sister', 'Son', 'Daughter', 'Wife'].map((rel) => (
+                          <Pressable
+                            key={rel}
+                            style={[
+                              styles.relationshipButton,
+                              formData.relationship === rel && styles.relationshipButtonActive
+                            ]}
+                            onPress={() => setFormData({ ...formData, relationship: rel })}
+                          >
+                            <Text style={[
+                              styles.relationshipButtonText,
+                              formData.relationship === rel && styles.relationshipButtonTextActive
+                            ]}>
+                              {rel}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Birth Year *</Text>
+                    <Input
+                      value={formData.birthYear}
+                      onChangeText={(text) => {
+                        const numericText = text.replace(/[^0-9]/g, '');
+                        if (numericText.length <= 4) {
+                          setFormData({ ...formData, birthYear: numericText });
+                        }
+                      }}
+                      placeholder="e.g., 1990"
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Deceased</Text>
+                    <View style={styles.deceasedContainer}>
+                      <Pressable 
+                        style={[
+                          styles.deceasedButton,
+                          !formData.isDeceased && styles.deceasedButtonActive
+                        ]}
+                        onPress={() => setFormData({ ...formData, isDeceased: false })}
+                      >
+                        <Text style={[
+                          styles.deceasedButtonText,
+                          !formData.isDeceased && styles.deceasedButtonTextActive
+                        ]}>
+                          No
+                        </Text>
+                      </Pressable>
+                      <Pressable 
+                        style={[
+                          styles.deceasedButton,
+                          formData.isDeceased && styles.deceasedButtonActive
+                        ]}
+                        onPress={() => setFormData({ ...formData, isDeceased: true })}
+                      >
+                        <Text style={[
+                          styles.deceasedButtonText,
+                          formData.isDeceased && styles.deceasedButtonTextActive
+                        ]}>
+                          Yes
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {formData.isDeceased && (
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Death Year *</Text>
+                      <Input
+                        value={formData.deathYear}
+                        onChangeText={(text) => {
+                          const numericText = text.replace(/[^0-9]/g, '');
+                          if (numericText.length <= 4) {
+                            setFormData({ ...formData, deathYear: numericText });
+                          }
+                        }}
+                        placeholder="e.g., 2020"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  )}
+                </ScrollView>
+              </KeyboardAvoidingView>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <Button
+                onPress={handleAddMember}
+                style={styles.saveButton}
+                disabled={isLoading}
+              >
+                <Save size={20} color={Colors.text.white} style={styles.buttonIcon} />
+                <Text style={styles.saveButtonText}>
+                  {isLoading ? 'Adding...' : 'Add Member'}
+                </Text>
+              </Button>
+            </View>
+          </View>
+        </Modal>
+        
+        {/* Family Creation Flow Modal */}
+        <FamilyCreationFlow
+          visible={showFamilyCreationFlow}
+          onClose={() => setShowFamilyCreationFlow(false)}
+          onComplete={(familyId) => {
+            setShowFamilyCreationFlow(false);
+            loadFamilyData(); // Reload family data after creation
+          }}
+          onInitializeFamily={async (type, familyName) => {
+            try {
+              if (!accessToken) {
+                return { success: false, message: 'Authentication required' };
+              }
+              console.log('Initializing family creation with type:', type, 'familyName:', familyName);
+              const result = await initializeFamilyCreation(familyName, type, accessToken);
+              console.log('Initialize family creation result:', result);
+              return result;
+            } catch (error) {
+              console.error('Initialize family creation error:', error);
+              return { success: false, message: 'Failed to initialize family creation' };
+            }
+          }}
+          onSetupParents={async (familyId, fatherData, mothersData) => {
+            try {
+              if (!accessToken) {
+                return { success: false, message: 'Authentication required' };
+              }
+              const result = await setupParents(familyId, fatherData, mothersData, accessToken);
+              return result;
+            } catch (error) {
+              return { success: false, message: 'Failed to setup parents' };
+            }
+          }}
+        />
+      </SafeAreaView>
     );
   }
 
@@ -281,6 +642,7 @@ export default function TreeScreen() {
               handleGenerateJoinId(member);
             }
           }}
+          onAddMember={() => setShowAddModal(true)}
         />
             </View>
       
@@ -306,23 +668,25 @@ export default function TreeScreen() {
               <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Avatar Section */}
                 <View style={styles.avatarSection}>
-                  <Pressable style={styles.avatarButton} onPress={handleTakePicture}>
-                    {formData.avatar ? (
-                      <Image source={{ uri: formData.avatar }} style={styles.selectedAvatar} />
-                    ) : (
-                      <View style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        backgroundColor: Colors.lightGray,
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                      }}>
-                        <Camera size={32} color={Colors.gray} />
+                  <View style={styles.avatarContainer}>
+                    <Pressable style={styles.avatarButton} onPress={handleTakePicture}>
+                      {formData.avatar ? (
+                        <Image source={{ uri: formData.avatar }} style={styles.selectedAvatar} />
+                      ) : (
+                        <View style={styles.avatarPlaceholder}>
+                          <Camera size={32} color="#94a3b8" />
+                          <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                    {!formData.avatar && (
+                      <View style={styles.avatarOverlay}>
+                        <Text style={styles.avatarOverlayText}>Tap to upload</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-                  </Pressable>
-                  <Text style={styles.avatarLabel}>Tap to add photo</Text>
-                  </View>
+                  <Text style={styles.avatarLabel}>Profile picture (optional)</Text>
+                </View>
 
                 {/* Form Fields */}
                 <View style={styles.inputGroup}>
@@ -331,7 +695,13 @@ export default function TreeScreen() {
                     value={formData.firstName}
                     onChangeText={(text) => setFormData({ ...formData, firstName: text })}
                     placeholder="Enter first name"
+                    maxLength={100}
                   />
+                  {formData.firstName.length > 80 && (
+                    <Text style={styles.helperText}>
+                      {100 - formData.firstName.length} characters remaining
+                    </Text>
+                  )}
             </View>
 
                 <View style={styles.inputGroup}>
@@ -340,7 +710,13 @@ export default function TreeScreen() {
                     value={formData.lastName}
                     onChangeText={(text) => setFormData({ ...formData, lastName: text })}
                     placeholder="Enter last name"
+                    maxLength={100}
                   />
+                  {formData.lastName.length > 80 && (
+                    <Text style={styles.helperText}>
+                      {100 - formData.lastName.length} characters remaining
+                    </Text>
+                  )}
               </View>
 
                 <View style={styles.inputGroup}>
@@ -349,7 +725,38 @@ export default function TreeScreen() {
                     value={formData.relationship}
                     onChangeText={(text) => setFormData({ ...formData, relationship: text })}
                     placeholder="e.g., Father, Mother, Brother, Sister"
+                    maxLength={50}
                   />
+                  {formData.relationship.length > 40 && (
+                    <Text style={styles.helperText}>
+                      {50 - formData.relationship.length} characters remaining
+                    </Text>
+                  )}
+                  
+                  {/* Quick relationship buttons */}
+                  <View style={styles.quickRelationships}>
+                    <Text style={styles.quickRelationshipsLabel}>Quick select:</Text>
+                    <View style={styles.relationshipButtons}>
+                      {['Father', 'Mother', 'Brother', 'Sister', 'Son', 'Daughter', 'Wife'].map((rel) => (
+                        <Pressable
+                          key={rel}
+                          style={[
+                            styles.relationshipButton,
+                            formData.relationship === rel && styles.relationshipButtonActive
+                          ]}
+                          onPress={() => setFormData({ ...formData, relationship: rel })}
+                        >
+                          <Text style={[
+                            styles.relationshipButtonText,
+                            formData.relationship === rel && styles.relationshipButtonTextActive
+                          ]}>
+                            {rel}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                  
                   {family && !family.members.some(member => 
                     member.relationship.toLowerCase().includes('father') || 
                     member.relationship.toLowerCase().includes('mother') ||
@@ -359,16 +766,71 @@ export default function TreeScreen() {
                       ⚠️ You must add at least one parent (Father, Mother, or Wife) first
                   </Text>
               )}
+
+              {/* Mother Selection for Children */}
+              {family && family.members.some(member => 
+                member.relationship.toLowerCase().includes('mother') ||
+                member.relationship.toLowerCase().includes('wife')
+              ) && (
+                formData.relationship.toLowerCase().includes('son') ||
+                formData.relationship.toLowerCase().includes('daughter') ||
+                formData.relationship.toLowerCase().includes('child')
+              ) && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Mother *</Text>
+                  <View style={styles.motherSelection}>
+                    {family.members
+                      .filter(member => 
+                        member.relationship.toLowerCase().includes('mother') ||
+                        member.relationship.toLowerCase().includes('wife')
+                      )
+                      .map((mother) => (
+                        <Pressable
+                          key={mother.id}
+                          style={[
+                            styles.motherOption,
+                            formData.motherId === mother.id && styles.motherOptionSelected
+                          ]}
+                          onPress={() => setFormData({ ...formData, motherId: mother.id })}
+                        >
+                          <Text style={[
+                            styles.motherOptionText,
+                            formData.motherId === mother.id && styles.motherOptionTextSelected
+                          ]}>
+                            {mother.firstName} {mother.lastName} ({mother.relationship})
+                          </Text>
+                        </Pressable>
+                      ))}
+                  </View>
+                  {!formData.motherId && (
+                    <Text style={styles.helperText}>
+                      ⚠️ Please select the mother for this child
+                    </Text>
+                  )}
+                </View>
+              )}
             </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Birth Year *</Text>
                   <Input
                     value={formData.birthYear}
-                    onChangeText={(text) => setFormData({ ...formData, birthYear: text })}
+                    onChangeText={(text) => {
+                      // Only allow 4-digit numbers
+                      const numericText = text.replace(/[^0-9]/g, '');
+                      if (numericText.length <= 4) {
+                        setFormData({ ...formData, birthYear: numericText });
+                      }
+                    }}
                     placeholder="e.g., 1990"
                     keyboardType="numeric"
+                    maxLength={4}
                   />
+                  {formData.birthYear && (
+                    <Text style={styles.helperText}>
+                      {formData.birthYear.length === 4 ? '✓ Valid year format' : 'Enter 4-digit year'}
+                    </Text>
+                  )}
         </View>
 
                 <View style={styles.inputGroup}>
@@ -407,13 +869,28 @@ export default function TreeScreen() {
 
                 {formData.isDeceased && (
                   <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Death Year</Text>
+                    <Text style={styles.label}>Death Year *</Text>
                     <Input
                       value={formData.deathYear}
-                      onChangeText={(text) => setFormData({ ...formData, deathYear: text })}
+                      onChangeText={(text) => {
+                        // Only allow 4-digit numbers
+                        const numericText = text.replace(/[^0-9]/g, '');
+                        if (numericText.length <= 4) {
+                          setFormData({ ...formData, deathYear: numericText });
+                        }
+                      }}
                       placeholder="e.g., 2020"
                       keyboardType="numeric"
+                      maxLength={4}
                     />
+                    {formData.deathYear && (
+                      <Text style={styles.helperText}>
+                        {formData.deathYear.length === 4 ? '✓ Valid year format' : 'Enter 4-digit year'}
+                        {formData.birthYear && formData.deathYear && 
+                         parseInt(formData.deathYear) < parseInt(formData.birthYear) && 
+                         ' ⚠️ Death year cannot be before birth year'}
+                      </Text>
+                    )}
                 </View>
               )}
               </ScrollView>
@@ -573,8 +1050,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    backgroundColor: '#ffffff',
   },
   modalTitle: {
     fontSize: 20,
@@ -592,12 +1076,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
   },
-  avatarButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  avatarContainer: {
+    position: 'relative',
     marginBottom: 10,
+  },
+  avatarButton: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+    backgroundColor: '#f8fafc',
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  avatarPlaceholderText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  avatarOverlayText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: '600',
   },
   selectedAvatar: {
     width: '100%',
@@ -605,7 +1123,8 @@ const styles = StyleSheet.create({
   },
   avatarLabel: {
     fontSize: 14,
-    color: Colors.gray,
+    color: '#64748b',
+    fontWeight: '500',
   },
   inputGroup: {
     marginBottom: 20,
@@ -628,38 +1147,45 @@ const styles = StyleSheet.create({
   },
   deceasedButton: {
     flex: 1,
-    backgroundColor: Colors.lightGray,
+    backgroundColor: '#f8fafc',
     paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   deceasedButtonActive: {
     backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   deceasedButtonText: {
-    color: Colors.gray,
+    color: '#64748b',
     fontWeight: '600',
+    fontSize: 14,
   },
   deceasedButtonTextActive: {
     color: Colors.white,
+    fontWeight: '700',
   },
   modalFooter: {
     padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: Colors.lightGray,
+    paddingTop: 10,
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.primary,
-    paddingVertical: 15,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 12,
   },
   saveButtonText: {
-    color: Colors.white,
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginLeft: 8,
   },
   buttonIcon: {
     marginRight: 8,
@@ -735,5 +1261,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  quickRelationships: {
+    marginTop: 12,
+  },
+  quickRelationshipsLabel: {
+    fontSize: 12,
+    color: Colors.gray,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  relationshipButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  relationshipButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  relationshipButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  relationshipButtonText: {
+    fontSize: 12,
+    color: Colors.gray,
+    fontWeight: '500',
+  },
+  relationshipButtonTextActive: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  motherSelection: {
+    marginTop: 8,
+    gap: 8,
+  },
+  motherOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.neutral[100],
+    borderWidth: 1,
+    borderColor: Colors.neutral[200],
+  },
+  motherOptionSelected: {
+    backgroundColor: Colors.primary[100],
+    borderColor: Colors.primary[600],
+  },
+  motherOptionText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  motherOptionTextSelected: {
+    color: Colors.primary[600],
+    fontWeight: '600',
+  },
+  createButton: {
+    marginTop: 24,
   },
 });

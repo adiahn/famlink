@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi, AuthResponse } from '../api/authApi';
+import { router } from 'expo-router';
 
 interface User {
   id: string;
@@ -35,7 +36,7 @@ interface AuthActions {
   signIn: (data: { phone: string; password: string }) => Promise<{ success: boolean; message: string }>;
   verifyEmail: (data: { email: string; verificationCode: string }) => Promise<{ success: boolean; message: string }>;
   resendVerification: (phone: string) => Promise<{ success: boolean; message: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   clearError: () => void;
   setUser: (user: User) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
@@ -271,25 +272,33 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       },
 
       logout: async () => {
+        console.log('Logout function called');
         const { accessToken } = get();
         
         if (accessToken) {
           try {
+            console.log('Calling authApi.logout with token');
             await authApi.logout(accessToken);
+            console.log('AuthApi logout successful');
           } catch (error) {
             console.error('Logout error:', error);
           }
         }
         
+        console.log('Clearing auth state');
         set({
-        user: null, 
+          user: null, 
           accessToken: null,
           refreshToken: null,
           tokenExpiry: null,
-        isAuthenticated: false, 
+          isAuthenticated: false, 
           isLoading: false,
-        error: null 
+          error: null 
         });
+        
+        console.log('Navigating to login screen');
+        // Navigate to login screen after logout
+        router.replace('/auth/login');
       },
 
       clearError: () => {

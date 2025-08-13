@@ -10,7 +10,6 @@ import {
   Shield, 
   Heart,
   TrendingUp,
-  Calendar,
   ArrowRight,
   Copy,
   Link,
@@ -241,19 +240,7 @@ export default function Home() {
           </View>
         )}
 
-        {family && family.members.length > 0 && (
-          <View style={styles.upcomingSection}>
-            <Text style={styles.sectionTitle}>Upcoming</Text>
-            <View style={styles.upcomingCard}>
-              <Calendar size={24} color="#ea580c" strokeWidth={2} />
-              <View style={styles.upcomingContent}>
-                <Text style={styles.upcomingTitle}>Family Reunion</Text>
-                <Text style={styles.upcomingDate}>December 25, 2025</Text>
-                <Text style={styles.upcomingMembers}>{family.members.length} family members invited</Text>
-              </View>
-            </View>
-          </View>
-        )}
+
       </ScrollView>
 
       {/* Link Family Modal */}
@@ -488,44 +475,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   activityTime: {
-    fontSize: 12,
-    color: '#64748b',
-  },
-  upcomingSection: {
-    paddingHorizontal: 24,
-  },
-  upcomingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  upcomingContent: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  upcomingTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 4,
-  },
-  upcomingDate: {
-    fontSize: 14,
-    color: '#ea580c',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  upcomingMembers: {
     fontSize: 12,
     color: '#64748b',
   },

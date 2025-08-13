@@ -13,6 +13,9 @@ export interface AddMemberRequest {
   isDeceased: boolean;
   deathYear?: string;
   avatar?: File;
+  // New fields for enhanced family tree structure
+  motherId?: string;
+  parentType?: 'father' | 'mother' | 'child';
 }
 
 export interface UpdateMemberRequest {
@@ -108,6 +111,78 @@ export interface FamilyMember {
   linkedFrom?: string;
 }
 
+// New interfaces for enhanced family tree structure
+export interface InitializeFamilyCreationRequest {
+  creationType: 'own_family' | 'parents_family';
+  familyName?: string;
+}
+
+export interface SetupParentsRequest {
+  father: {
+    firstName: string;
+    lastName: string;
+    birthYear: string;
+    isDeceased: boolean;
+    deathYear?: string;
+    avatar?: File;
+  };
+  mothers: Array<{
+    firstName: string;
+    lastName: string;
+    birthYear: string;
+    isDeceased: boolean;
+    deathYear?: string;
+    avatar?: File;
+    spouseOrder: number;
+  }>;
+}
+
+export interface TreeStructureResponse {
+  family: {
+    id: string;
+    name: string;
+    creationType: string;
+  };
+  treeStructure: {
+    father: {
+      id: string;
+      name: string;
+      details: FamilyMember;
+    };
+    mothers: Array<{
+      id: string;
+      name: string;
+      details: FamilyMember;
+      branch: {
+        id: string;
+        name: string;
+        order: number;
+      };
+      children: FamilyMember[];
+    }>;
+    branches: Array<{
+      id: string;
+      name: string;
+      order: number;
+    }>;
+    statistics: {
+      totalMembers: number;
+      totalBranches: number;
+      totalChildren: number;
+    };
+  };
+}
+
+export interface AvailableMothersResponse {
+  mothers: Array<{
+    id: string;
+    name: string;
+    spouseOrder: number;
+    branchName: string;
+    childrenCount: number;
+  }>;
+}
+
 class FamilyApi {
   private baseUrl = `${API_BASE_URL}/families`;
 
@@ -157,32 +232,61 @@ class FamilyApi {
     }
   }
 
-  async addMember(familyId: string, data: AddMemberRequest, token: string): Promise<FamilyResponse<FamilyData>> {
+    async addMember(familyId: string, data: AddMemberRequest, token: string): Promise<FamilyResponse<FamilyData>> {
     try {
-      const formData = new FormData();
-      formData.append('firstName', data.firstName);
-      formData.append('lastName', data.lastName);
-      formData.append('relationship', data.relationship);
-      formData.append('birthYear', data.birthYear);
-      formData.append('isDeceased', data.isDeceased.toString());
-      if (data.deathYear) {
-        formData.append('deathYear', data.deathYear);
-      }
+      // If there's an avatar, use FormData, otherwise use JSON
       if (data.avatar) {
+        const formData = new FormData();
+        formData.append('firstName', data.firstName);
+        formData.append('lastName', data.lastName);
+        formData.append('relationship', data.relationship);
+        formData.append('birthYear', data.birthYear);
+        formData.append('isDeceased', data.isDeceased ? 'true' : 'false');
+        if (data.deathYear) {
+          formData.append('deathYear', data.deathYear);
+        }
         formData.append('avatar', data.avatar);
+
+        console.log('Sending FormData for add member with avatar');
+        console.log('FormData entries:');
+        for (let [key, value] of formData.entries()) {
+          console.log(`${key}: ${value}`);
+        }
+
+        const response = await fetch(`${this.baseUrl}/${familyId}/members`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        const result = await response.json();
+        console.log('Add member response:', result);
+        return result;
+      } else {
+        // Use JSON for requests without avatar
+        const jsonData = {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          relationship: data.relationship,
+          birthYear: data.birthYear,
+          isDeceased: data.isDeceased,
+          deathYear: data.deathYear,
+        };
+
+        console.log('Sending JSON data for add member:', jsonData);
+
+        const response = await fetch(`${this.baseUrl}/${familyId}/members`, {
+          method: 'POST',
+          headers: this.getAuthHeaders(token),
+          body: JSON.stringify(jsonData),
+        });
+
+        const result = await response.json();
+        console.log('Add member response:', result);
+        return result;
       }
-
-      const response = await fetch(`${this.baseUrl}/${familyId}/members`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      const result = await response.json();
-      console.log('Add member response:', result);
-      return result;
     } catch (error) {
       console.error('Add member error:', error);
       throw error;
@@ -191,30 +295,51 @@ class FamilyApi {
 
   async updateMember(familyId: string, memberId: string, data: UpdateMemberRequest, token: string): Promise<FamilyResponse<FamilyData>> {
     try {
-      const formData = new FormData();
-      formData.append('firstName', data.firstName);
-      formData.append('lastName', data.lastName);
-      formData.append('relationship', data.relationship);
-      formData.append('birthYear', data.birthYear);
-      formData.append('isDeceased', data.isDeceased.toString());
-      if (data.deathYear) {
-        formData.append('deathYear', data.deathYear);
-      }
+      // If there's an avatar, use FormData, otherwise use JSON
       if (data.avatar) {
+        const formData = new FormData();
+        formData.append('firstName', data.firstName);
+        formData.append('lastName', data.lastName);
+        formData.append('relationship', data.relationship);
+        formData.append('birthYear', data.birthYear);
+        formData.append('isDeceased', data.isDeceased ? 'true' : 'false');
+        if (data.deathYear) {
+          formData.append('deathYear', data.deathYear);
+        }
         formData.append('avatar', data.avatar);
+
+        const response = await fetch(`${this.baseUrl}/${familyId}/members/${memberId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        const result = await response.json();
+        console.log('Update member response:', result);
+        return result;
+      } else {
+        // Use JSON for requests without avatar
+        const jsonData = {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          relationship: data.relationship,
+          birthYear: data.birthYear,
+          isDeceased: data.isDeceased,
+          deathYear: data.deathYear,
+        };
+
+        const response = await fetch(`${this.baseUrl}/${familyId}/members/${memberId}`, {
+          method: 'PUT',
+          headers: this.getAuthHeaders(token),
+          body: JSON.stringify(jsonData),
+        });
+
+        const result = await response.json();
+        console.log('Update member response:', result);
+        return result;
       }
-
-      const response = await fetch(`${this.baseUrl}/${familyId}/members/${memberId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      const result = await response.json();
-      console.log('Update member response:', result);
-      return result;
     } catch (error) {
       console.error('Update member error:', error);
       throw error;
@@ -282,6 +407,85 @@ class FamilyApi {
       return result;
     } catch (error) {
       console.error('Validate Join ID error:', error);
+      throw error;
+    }
+  }
+
+  // New methods for enhanced family tree structure
+  async initializeFamilyCreation(data: InitializeFamilyCreationRequest, token: string): Promise<FamilyResponse<{ familyId: string; creationType: string; currentStep: string; nextStep: string }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/initialize-creation`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(token),
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+      console.log('Initialize family creation response:', result);
+      return result;
+    } catch (error) {
+      console.error('Initialize family creation error:', error);
+      throw error;
+    }
+  }
+
+  async setupParents(familyId: string, data: SetupParentsRequest, token: string): Promise<FamilyResponse<{
+    family: {
+      id: string;
+      name: string;
+      father: FamilyMember;
+      mothers: FamilyMember[];
+      branches: Array<{
+        id: string;
+        name: string;
+        order: number;
+      }>;
+    };
+  }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/${familyId}/setup-parents`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(token),
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+      console.log('Setup parents response:', result);
+      return result;
+    } catch (error) {
+      console.error('Setup parents error:', error);
+      throw error;
+    }
+  }
+
+  async getTreeStructure(familyId: string, token: string): Promise<FamilyResponse<TreeStructureResponse>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/${familyId}/tree-structure`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(token),
+      });
+
+      const result = await response.json();
+      console.log('Get tree structure response:', result);
+      return result;
+    } catch (error) {
+      console.error('Get tree structure error:', error);
+      throw error;
+    }
+  }
+
+  async getAvailableMothers(familyId: string, token: string): Promise<FamilyResponse<AvailableMothersResponse>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/${familyId}/available-mothers`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(token),
+      });
+
+      const result = await response.json();
+      console.log('Get available mothers response:', result);
+      return result;
+    } catch (error) {
+      console.error('Get available mothers error:', error);
       throw error;
     }
   }

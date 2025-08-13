@@ -48,9 +48,10 @@ interface TreeNode {
 interface FamilyTreeViewProps {
   familyMembers: FamilyMember[];
   onMemberSelect?: (memberId: string) => void;
+  onAddMember?: () => void;
 }
 
-export default function FamilyTreeView({ familyMembers, onMemberSelect }: FamilyTreeViewProps) {
+export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMember }: FamilyTreeViewProps) {
   const [treeData, setTreeData] = useState<TreeNode | null>(null);
 
   useEffect(() => {
@@ -145,17 +146,22 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
       member.relationship.toLowerCase().includes('parent')
     );
 
-    // Find children (siblings, sons, daughters)
-    const children = validMembers.filter(member => 
-      member.relationship.toLowerCase().includes('brother') || 
-      member.relationship.toLowerCase().includes('sister') ||
-      member.relationship.toLowerCase().includes('son') ||
-      member.relationship.toLowerCase().includes('daughter') ||
-      member.relationship.toLowerCase().includes('child') ||
-      member.relationship.toLowerCase().includes('sibling') ||
-      member.relationship === 'Creator' ||
-      member.relationship === 'creator'
-    );
+    // Find children (siblings, sons, daughters) - more inclusive filtering
+    const children = validMembers.filter(member => {
+      const relationship = member.relationship.toLowerCase();
+      return relationship.includes('brother') || 
+             relationship.includes('sister') ||
+             relationship.includes('son') ||
+             relationship.includes('daughter') ||
+             relationship.includes('child') ||
+             relationship.includes('sibling') ||
+             relationship === 'creator' ||
+             relationship === 'creator' ||
+             // Add any other relationship types that should be considered children
+             relationship.includes('cousin') ||
+             relationship.includes('nephew') ||
+             relationship.includes('niece');
+    });
 
     // If no clear categorization, show all members at the same level
     if (parents.length === 0 && children.length === 0) {
@@ -199,6 +205,14 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
     console.log('Children found:', children);
     console.log('All valid members:', validMembers);
     console.log('All relationships:', validMembers.map(m => ({ name: m.name, relationship: m.relationship })));
+    
+    // Debug: Check which members are not being categorized
+    const categorizedMembers = [...parents, ...children];
+    const uncategorizedMembers = validMembers.filter(member => !categorizedMembers.includes(member));
+    console.log('Uncategorized members:', uncategorizedMembers);
+    console.log('Total members:', validMembers.length);
+    console.log('Categorized members:', categorizedMembers.length);
+    console.log('Uncategorized count:', uncategorizedMembers.length);
 
     // Create parent nodes
     const parentNodes: TreeNode[] = parents.map(parent => ({
@@ -526,23 +540,23 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
             stroke-width: 2;
           }
           
-          .relationship-indicator {
-            stroke-dasharray: 3,3;
-            transition: opacity 0.3s ease;
-          }
-          
-          .relationship-indicator:hover {
-            opacity: 0.8 !important;
-          }
-          
-          .relationship-dot {
+          .parent-connection-line {
             transition: all 0.3s ease;
           }
           
-                     .relationship-dot:hover {
-             r: 4;
-             opacity: 1 !important;
-           }
+          .parent-connection-line:hover {
+            stroke-width: 2;
+            opacity: 0.8 !important;
+          }
+          
+          .relationship-heart {
+            transition: all 0.3s ease;
+          }
+          
+          .relationship-heart:hover {
+            transform: scale(1.1);
+            opacity: 0.9 !important;
+          }
            
            .modal-overlay {
              position: fixed;
@@ -711,6 +725,48 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
           .zoom-btn:hover {
             background: #2563eb;
           }
+          
+          .add-member-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+          }
+          
+          .add-member-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            transition: all 0.3s ease;
+          }
+          
+          .add-member-btn:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+          }
+          
+          .add-member-btn:active {
+            transform: translateY(0);
+          }
+          
+          .add-icon {
+            font-size: 18px;
+            font-weight: bold;
+          }
+          
+          .add-text {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          }
         </style>
       </head>
       <body>
@@ -719,6 +775,12 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
             <button class="zoom-btn" onclick="zoomIn()">+</button>
             <button class="zoom-btn" onclick="zoomOut()">-</button>
             <button class="zoom-btn" onclick="resetZoom()">⌂</button>
+          </div>
+          <div class="add-member-controls">
+            <button class="add-member-btn" onclick="addMember()">
+              <span class="add-icon">+</span>
+              <span class="add-text">Add Member</span>
+            </button>
           </div>
           <div id="tree"></div>
         </div>
@@ -916,7 +978,38 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
               const totalWidth = (allParents.length - 1) * parentSpacing;
               const startX = coupleX - totalWidth / 2;
               
-              // Draw all parents
+              // Draw thin solid connection lines between all parents FIRST (behind cards)
+              if (allParents.length > 1) {
+                for (let i = 0; i < allParents.length - 1; i++) {
+                  const currentParent = allParents[i];
+                  const nextParent = allParents[i + 1];
+                  
+                  const currentX = startX + i * parentSpacing;
+                  const nextX = startX + (i + 1) * parentSpacing;
+                  
+                  // Draw a thin solid connecting line behind the cards
+                  g.append("path")
+                    .attr("class", "parent-connection-line")
+                    .attr("d", \`M\${currentX},\${coupleY} L\${nextX},\${coupleY}\`)
+                    .attr("stroke", "#6b7280")
+                    .attr("stroke-width", 1)
+                    .attr("fill", "none")
+                    .attr("opacity", 0.6);
+                  
+                  // Add a small heart symbol in the middle
+                  const midX = (currentX + nextX) / 2;
+                  const heartSize = 6;
+                  
+                  // Draw heart shape
+                  g.append("path")
+                    .attr("class", "relationship-heart")
+                    .attr("d", \`M\${midX - heartSize/2},\${coupleY - heartSize/2} C\${midX - heartSize},\${coupleY - heartSize} \${midX - heartSize},\${coupleY + heartSize/2} \${midX},\${coupleY + heartSize/2} C\${midX + heartSize},\${coupleY + heartSize/2} \${midX + heartSize},\${coupleY - heartSize} \${midX - heartSize/2},\${coupleY - heartSize/2} Z\`)
+                    .attr("fill", "#ef4444")
+                    .attr("opacity", 0.7);
+                }
+              }
+              
+              // Draw all parents AFTER the connection lines (on top)
               allParents.forEach((parent, index) => {
                 const parentX = startX + index * parentSpacing;
                 const parentY = coupleY;
@@ -979,33 +1072,6 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
                    .text('ID: ' + parent.joinId.substring(0, 6));
                }
               });
-              
-              // Draw simple relationship indicators between father and wives
-              if (father && wives.length > 0) {
-                wives.forEach((wife, index) => {
-                  const fatherX = startX; // Father is always first
-                  const wifeX = startX + (index + 1) * parentSpacing;
-                  
-                  // Draw a subtle connecting line
-                  g.append("path")
-                    .attr("class", "relationship-indicator")
-                    .attr("d", \`M\${fatherX},\${coupleY} L\${wifeX},\${coupleY}\`)
-                    .attr("stroke", "#e5e7eb")
-                    .attr("stroke-width", 1)
-                    .attr("fill", "none")
-                    .attr("opacity", 0.6);
-                  
-                  // Add a small relationship dot in the middle
-                  const midX = (fatherX + wifeX) / 2;
-                  g.append("circle")
-                    .attr("class", "relationship-dot")
-                    .attr("cx", midX)
-                    .attr("cy", coupleY)
-                    .attr("r", 3)
-                    .attr("fill", "#9ca3af")
-                    .attr("opacity", 0.7);
-                });
-              }
             }
           
           
@@ -1108,6 +1174,12 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
             svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
           }
           
+          function addMember() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'addMember'
+            }));
+          }
+          
           // Handle window resize
           window.addEventListener('resize', () => {
             location.reload();
@@ -1123,6 +1195,8 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect }: Family
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'nodeSelected' && onMemberSelect) {
         onMemberSelect(data.nodeId);
+      } else if (data.type === 'addMember' && onAddMember) {
+        onAddMember();
       }
     } catch (error) {
       console.error('Error parsing WebView message:', error);
