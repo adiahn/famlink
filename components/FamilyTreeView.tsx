@@ -2,30 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Colors } from '../constants/Colors';
+import { FamilyMember } from '../types/family';
+import { 
+  getMemberDisplayName, 
+  getMemberGender, 
+  groupChildrenByMother,
+  getFather,
+  getMothers,
+  getChildren
+} from '../utils/familyHelpers';
 
 const { width, height } = Dimensions.get('window');
-
-interface FamilyMember {
-  id: string;
-  name: string;
-  firstName?: string;
-  lastName?: string;
-  fullName?: string;
-  relationship: string;
-  birthYear: string;
-  isDeceased: boolean;
-  deathYear?: string;
-  isVerified: boolean;
-  isFamilyCreator: boolean;
-  joinId: string;
-  avatarUrl?: string;
-  gender?: 'male' | 'female';
-  spouse?: string;
-  children?: string[];
-  isLinkedMember?: boolean;
-  sourceFamily?: string;
-  originalFamilyId?: string;
-}
 
 interface TreeNode {
   id: string;
@@ -90,8 +77,8 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
     
     if (!members || members.length === 0) {
       return {
-        id: 'root',
-        name: 'Family',
+        id: 'empty',
+        name: 'No Family Members',
         gender: 'male',
         birthYear: '',
         isDeceased: false,
@@ -109,6 +96,8 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
         lastName: member.lastName,
         relationship: member.relationship,
         birthYear: member.birthYear,
+        motherId: member.motherId,
+        parentType: member.parentType,
         hasName: !!member.name,
         hasFirstName: !!member.firstName,
         hasLastName: !!member.lastName
@@ -125,68 +114,50 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
     
     if (validMembers.length === 0) {
       return {
-        id: 'root',
-        name: 'Family',
+        id: 'empty',
+        name: 'No Family Members',
         gender: 'male',
         birthYear: '',
         isDeceased: false,
         children: []
       };
     }
-    
-    // Create a map for quick lookup
-    const memberMap = new Map<string, FamilyMember>();
-    validMembers.forEach(member => memberMap.set(member.id, member));
 
-    // Find parents (father, mother, and wives)
-    const parents = validMembers.filter(member => 
-      member.relationship.toLowerCase().includes('father') || 
-      member.relationship.toLowerCase().includes('mother') ||
-      member.relationship.toLowerCase().includes('wife') ||
-      member.relationship.toLowerCase().includes('parent')
-    );
+    // Find the father (root of the tree)
+    const father = getFather(validMembers);
 
-    // Find children (siblings, sons, daughters) - more inclusive filtering
-    const children = validMembers.filter(member => {
-      const relationship = member.relationship.toLowerCase();
-      return relationship.includes('brother') || 
-             relationship.includes('sister') ||
-             relationship.includes('son') ||
-             relationship.includes('daughter') ||
-             relationship.includes('child') ||
-             relationship.includes('sibling') ||
-             relationship === 'creator' ||
-             relationship === 'creator' ||
-             // Add any other relationship types that should be considered children
-             relationship.includes('cousin') ||
-             relationship.includes('nephew') ||
-             relationship.includes('niece');
-    });
+    // Find all mothers/wives
+    const mothers = getMothers(validMembers);
 
-    // If no clear categorization, show all members at the same level
-    if (parents.length === 0 && children.length === 0) {
-      console.log('No clear parent/child categorization, showing all members at same level');
-      return {
-        id: 'root',
-        name: 'Family',
-        gender: 'male',
-        birthYear: '',
-        isDeceased: false,
-        children: validMembers.map(member => {
-          let displayName = member.name || member.fullName;
-          if (!displayName && (member.firstName || member.lastName)) {
-            displayName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
-          }
-          if (!displayName) {
-            displayName = member.relationship;
-          }
-          
-          return {
+    // Find all children
+    const children = getChildren(validMembers);
+
+    console.log('Father found:', father);
+    console.log('Mothers found:', mothers);
+    console.log('Children found:', children);
+
+    // If no father found, create a fallback structure
+    if (!father) {
+      console.log('No father found, creating fallback structure');
+      // Return the first member as root, or create a simple structure
+      if (validMembers.length > 0) {
+        const firstMember = validMembers[0];
+        return {
+          id: firstMember.id,
+          name: getMemberDisplayName(firstMember),
+          gender: getMemberGender(firstMember),
+          birthYear: firstMember.birthYear,
+          isDeceased: firstMember.isDeceased,
+          deathYear: firstMember.deathYear,
+          avatarUrl: firstMember.avatarUrl,
+          joinId: firstMember.joinId,
+          relationship: firstMember.relationship,
+          isLinkedMember: firstMember.isLinkedMember,
+          sourceFamily: firstMember.sourceFamily,
+          children: validMembers.slice(1).map(member => ({
             id: member.id,
-            name: displayName,
-            gender: member.gender || (member.relationship.toLowerCase().includes('father') || 
-                                     member.relationship.toLowerCase().includes('brother') || 
-                                     member.relationship.toLowerCase().includes('son') ? 'male' : 'female'),
+            name: getMemberDisplayName(member),
+            gender: getMemberGender(member),
             birthYear: member.birthYear,
             isDeceased: member.isDeceased,
             deathYear: member.deathYear,
@@ -196,156 +167,80 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
             isLinkedMember: member.isLinkedMember,
             sourceFamily: member.sourceFamily,
             children: []
-          };
-        })
-      };
-    }
-
-    console.log('Parents found:', parents);
-    console.log('Children found:', children);
-    console.log('All valid members:', validMembers);
-    console.log('All relationships:', validMembers.map(m => ({ name: m.name, relationship: m.relationship })));
-    
-    // Debug: Check which members are not being categorized
-    const categorizedMembers = [...parents, ...children];
-    const uncategorizedMembers = validMembers.filter(member => !categorizedMembers.includes(member));
-    console.log('Uncategorized members:', uncategorizedMembers);
-    console.log('Total members:', validMembers.length);
-    console.log('Categorized members:', categorizedMembers.length);
-    console.log('Uncategorized count:', uncategorizedMembers.length);
-
-    // Create parent nodes
-    const parentNodes: TreeNode[] = parents.map(parent => ({
-      id: parent.id,
-      name: parent.name,
-      gender: (parent.gender || (parent.relationship.toLowerCase().includes('father') ? 'male' : 'female')) as 'male' | 'female',
-      birthYear: parent.birthYear,
-      isDeceased: parent.isDeceased,
-      deathYear: parent.deathYear,
-      avatarUrl: parent.avatarUrl,
-      joinId: parent.joinId,
-      relationship: parent.relationship,
-      children: []
-    }));
-
-
-
-    // Create child nodes with proper name generation
-    const childNodes = children.map(child => {
-      // Generate name from multiple possible sources
-      let displayName = child.name || child.fullName;
-      if (!displayName && (child.firstName || child.lastName)) {
-        displayName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
-      }
-      if (!displayName) {
-        displayName = child.relationship; // Only as last resort
-      }
-      
-      return {
-        id: child.id,
-        name: displayName,
-        gender: (child.gender || (child.relationship.toLowerCase().includes('brother') || 
-                                child.relationship.toLowerCase().includes('son') ? 'male' : 'female')) as 'male' | 'female',
-        birthYear: child.birthYear,
-        isDeceased: child.isDeceased,
-        deathYear: child.deathYear,
-        avatarUrl: child.avatarUrl,
-        joinId: child.joinId,
-        relationship: child.relationship,
-        isLinkedMember: child.isLinkedMember,
-        sourceFamily: child.sourceFamily,
-        children: []
-      };
-    });
-
-    // If we have parents, create a proper hierarchical structure
-    if (parents.length > 0) {
-      // Create parent nodes with proper name generation
-      const parentNodes = parents.map(parent => {
-        let displayName = parent.name || parent.fullName;
-        if (!displayName && (parent.firstName || parent.lastName)) {
-          displayName = `${parent.firstName || ''} ${parent.lastName || ''}`.trim();
-        }
-        if (!displayName) {
-          displayName = parent.relationship; // Only as last resort
-        }
-        
+          }))
+        };
+      } else {
         return {
-          id: parent.id,
-          name: displayName,
-          gender: (parent.gender || (parent.relationship.toLowerCase().includes('father') ? 'male' : 'female')) as 'male' | 'female',
-          birthYear: parent.birthYear,
-          isDeceased: parent.isDeceased,
-          deathYear: parent.deathYear,
-          avatarUrl: parent.avatarUrl,
-          joinId: parent.joinId,
-          relationship: parent.relationship,
-          isLinkedMember: parent.isLinkedMember,
-          sourceFamily: parent.sourceFamily,
+          id: 'empty',
+          name: 'No Family Members',
+          gender: 'male',
+          birthYear: '',
+          isDeceased: false,
           children: []
         };
-      });
-
-      // Create a family couple node that contains both parents
-      const familyCoupleNode: TreeNode = {
-        id: 'family-couple',
-        name: 'Parents',
-        gender: 'male',
-        birthYear: '',
-        isDeceased: false,
-        children: childNodes // Children are directly under the couple
-      };
-
-      // Create a root node with the family couple as the main child
-      const rootNode: TreeNode = {
-        id: 'root',
-        name: 'Family',
-        gender: 'male',
-        birthYear: '',
-        isDeceased: false,
-        children: [familyCoupleNode]
-      };
-
-      return rootNode;
+      }
     }
 
-    // Fallback: if no parents, show all members at same level
-    const allMembers = validMembers.map(member => {
-      // Generate name from multiple possible sources
-      let displayName = member.name || member.fullName;
-      if (!displayName && (member.firstName || member.lastName)) {
-        displayName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
-      }
-      if (!displayName) {
-        displayName = member.relationship; // Only as last resort
-      }
+    // Create father node
+    const fatherNode: TreeNode = {
+      id: father.id,
+      name: getMemberDisplayName(father),
+      gender: getMemberGender(father),
+      birthYear: father.birthYear,
+      isDeceased: father.isDeceased,
+      deathYear: father.deathYear,
+      avatarUrl: father.avatarUrl,
+      joinId: father.joinId,
+      relationship: father.relationship,
+      isLinkedMember: father.isLinkedMember,
+      sourceFamily: father.sourceFamily,
+      children: []
+    };
+
+    // Group children by their mother
+    const childrenByMother = groupChildrenByMother(validMembers);
+
+    // Create mother nodes with their children
+    const motherNodes: TreeNode[] = mothers.map(mother => {
+      const motherChildren = childrenByMother.get(mother.id) || [];
       
-      return {
-        id: member.id,
-        name: displayName,
-        gender: member.gender || (member.relationship.toLowerCase().includes('father') || 
-                                 member.relationship.toLowerCase().includes('brother') || 
-                                 member.relationship.toLowerCase().includes('son') ? 'male' : 'female'),
-        birthYear: member.birthYear,
-        isDeceased: member.isDeceased,
-        deathYear: member.deathYear,
-        avatarUrl: member.avatarUrl,
-        joinId: member.joinId,
-        relationship: member.relationship,
-        isLinkedMember: member.isLinkedMember,
-        sourceFamily: member.sourceFamily,
-        children: []
+      const motherNode: TreeNode = {
+        id: mother.id,
+        name: getMemberDisplayName(mother),
+        gender: getMemberGender(mother),
+        birthYear: mother.birthYear,
+        isDeceased: mother.isDeceased,
+        deathYear: mother.deathYear,
+        avatarUrl: mother.avatarUrl,
+        joinId: mother.joinId,
+        relationship: mother.relationship,
+        isLinkedMember: mother.isLinkedMember,
+        sourceFamily: mother.sourceFamily,
+        children: motherChildren.map(child => ({
+          id: child.id,
+          name: getMemberDisplayName(child),
+          gender: getMemberGender(child),
+          birthYear: child.birthYear,
+          isDeceased: child.isDeceased,
+          deathYear: child.deathYear,
+          avatarUrl: child.avatarUrl,
+          joinId: child.joinId,
+          relationship: child.relationship,
+          isLinkedMember: child.isLinkedMember,
+          sourceFamily: child.sourceFamily,
+          children: []
+        }))
       };
+
+      return motherNode;
     });
 
-    return {
-      id: 'root',
-      name: 'Family',
-      gender: 'male',
-      birthYear: '',
-      isDeceased: false,
-      children: allMembers
-    };
+    // Set mother nodes as children of father
+    fatherNode.children = motherNodes;
+
+    // Return father as the root node (no wrapper "Family" node)
+    console.log('Built tree structure:', fatherNode);
+    return fatherNode;
   };
 
   const generateHTML = (data: TreeNode, parents: FamilyMember[]) => {
@@ -887,7 +782,7 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
              }
            });
           
-                     // Set up the tree layout
+           // Set up the tree layout
            const margin = { top: 50, right: 50, bottom: 50, left: 50 };
            const containerWidth = window.innerWidth - margin.left - margin.right;
            const containerHeight = window.innerHeight - margin.top - margin.bottom;
@@ -895,20 +790,52 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
            // Create the hierarchy
            const root = d3.hierarchy(data);
            
-           // If we have multiple children at the root level, arrange them horizontally
-           if (root.children && root.children.length > 1) {
-             // Use a cluster layout for better horizontal arrangement
-             const cluster = d3.cluster()
-               .size([containerWidth, containerHeight])
-               .nodeSize([320, 300]);
-             cluster(root);
-           } else {
-             // Use tree layout for hierarchical structure
-             const tree = d3.tree()
-               .size([containerWidth, containerHeight])
-               .nodeSize([320, 300]);
-             tree(root);
+           // Custom positioning for the new tree structure
+           function positionTree(root) {
+             // Father at the top center (root is now the father) - positioned higher
+             root.x = containerWidth / 2;
+             root.y = 50; // Moved higher from 100
+             
+             // Position mothers horizontally under father - with much more vertical space
+             if (root.children && root.children.length > 0) {
+               const mothers = root.children;
+               const motherCount = mothers.length;
+               
+               // Calculate much wider spacing between mothers
+               const minSpacing = 400; // Increased from 200
+               const maxSpacing = 600; // Increased from 400
+               const totalWidth = Math.max(containerWidth, motherCount * minSpacing);
+               const spacing = Math.max(minSpacing, Math.min(maxSpacing, totalWidth / (motherCount + 1)));
+               
+               // Calculate the total width needed for all mothers
+               const totalMotherWidth = (motherCount - 1) * spacing;
+               const startX = (containerWidth - totalMotherWidth) / 2; // Center the mothers
+               
+               mothers.forEach((mother, index) => {
+                 mother.x = startX + index * spacing;
+                 mother.y = 400; // Increased gap from 300 to 400 (350px gap from father)
+                 
+                 // Position children horizontally under their respective mothers
+                 if (mother.children && mother.children.length > 0) {
+                   const children = mother.children;
+                   const childCount = children.length;
+                   
+                   // Calculate child spacing for horizontal arrangement
+                   const childSpacing = 250; // Fixed spacing between children
+                   const totalChildWidth = (childCount - 1) * childSpacing;
+                   const childStartX = mother.x - totalChildWidth / 2; // Center children under mother
+                   
+                   children.forEach((child, childIndex) => {
+                     child.x = childStartX + childIndex * childSpacing;
+                     child.y = 700; // Much lower position for horizontal child layout (300px gap from mothers)
+                   });
+                 }
+               });
+             }
            }
+           
+           // Apply custom positioning
+           positionTree(root);
           
           // Create SVG
           const svg = d3.select("#tree")
@@ -939,163 +866,26 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
               .x(d => d.x)
               .y(d => d.y));
           
-                     // Find the family couple node and create parent cards within it
-           const familyCoupleNode = root.descendants().find(d => d.data.id === 'family-couple');
-           
-                       if (familyCoupleNode && parents.length > 0) {
-              console.log('Drawing parents:', parents);
-              // Calculate positions for parents within the couple node
-              const coupleX = familyCoupleNode.x;
-              const coupleY = familyCoupleNode.y;
-              const parentSpacing = 320; // Space between parents
-              
-              // Sort parents: Father first, then mothers/wives in order
-              const father = parents.find(p => p.relationship.toLowerCase().includes('father'));
-              const wives = parents.filter(p => 
-                p.relationship.toLowerCase().includes('wife') || 
-                p.relationship.toLowerCase().includes('mother')
-              ).sort((a, b) => {
-                // If it's a numbered wife, sort by number, otherwise treat as mother
-                const aNum = parseInt(a.relationship.match(/\\d+/)?.[0] || '0');
-                const bNum = parseInt(b.relationship.match(/\\d+/)?.[0] || '0');
-                if (aNum > 0 && bNum > 0) {
-                  return aNum - bNum;
-                }
-                // Mothers come before numbered wives
-                if (a.relationship.toLowerCase().includes('mother') && !b.relationship.toLowerCase().includes('mother')) {
-                  return -1;
-                }
-                if (b.relationship.toLowerCase().includes('mother') && !a.relationship.toLowerCase().includes('mother')) {
-                  return 1;
-                }
-                return 0;
-              });
-              
-              console.log('Father:', father);
-              console.log('Wives:', wives);
-              
-              const allParents = [father, ...wives].filter(Boolean);
-              const totalWidth = (allParents.length - 1) * parentSpacing;
-              const startX = coupleX - totalWidth / 2;
-              
-              // Draw thin solid connection lines between all parents FIRST (behind cards)
-              if (allParents.length > 1) {
-                for (let i = 0; i < allParents.length - 1; i++) {
-                  const currentParent = allParents[i];
-                  const nextParent = allParents[i + 1];
-                  
-                  const currentX = startX + i * parentSpacing;
-                  const nextX = startX + (i + 1) * parentSpacing;
-                  
-                  // Draw a thin solid connecting line behind the cards
-                  g.append("path")
-                    .attr("class", "parent-connection-line")
-                    .attr("d", \`M\${currentX},\${coupleY} L\${nextX},\${coupleY}\`)
-                    .attr("stroke", "#6b7280")
-                    .attr("stroke-width", 1)
-                    .attr("fill", "none")
-                    .attr("opacity", 0.6);
-                  
-                  // Add a small heart symbol in the middle
-                  const midX = (currentX + nextX) / 2;
-                  const heartSize = 6;
-                  
-                  // Draw heart shape
-                  g.append("path")
-                    .attr("class", "relationship-heart")
-                    .attr("d", \`M\${midX - heartSize/2},\${coupleY - heartSize/2} C\${midX - heartSize},\${coupleY - heartSize} \${midX - heartSize},\${coupleY + heartSize/2} \${midX},\${coupleY + heartSize/2} C\${midX + heartSize},\${coupleY + heartSize/2} \${midX + heartSize},\${coupleY - heartSize} \${midX - heartSize/2},\${coupleY - heartSize/2} Z\`)
-                    .attr("fill", "#ef4444")
-                    .attr("opacity", 0.7);
-                }
+          // Create node groups for all nodes
+          const nodes = g.selectAll(".node")
+            .data(root.descendants())
+            .enter().append("g")
+            .attr("class", "node")
+            .attr("transform", d => \`translate(\${d.x}, \${d.y})\`)
+            .on("click", function(event, d) {
+              // Handle node selection
+              if (selectedNode) {
+                selectedNode.select(".node-card").classed("selected", false);
               }
+              selectedNode = d3.select(this);
+              selectedNode.select(".node-card").classed("selected", true);
               
-              // Draw all parents AFTER the connection lines (on top)
-              allParents.forEach((parent, index) => {
-                const parentX = startX + index * parentSpacing;
-                const parentY = coupleY;
-                
-                // Determine gender and card style
-                const isMale = parent.relationship.toLowerCase().includes('father');
-                const cardClass = isMale ? 'male' : 'female';
-                const iconClass = isMale ? 'male' : 'female';
-                
-                               // Draw parent card (wider for better visibility)
-               g.append("rect")
-                 .attr("class", \`node-card \${cardClass}\`)
-                 .attr("x", parentX - 80)
-                 .attr("y", parentY - 70)
-                 .attr("width", 160)
-                 .attr("height", 140);
-               
-               // Draw profile picture (always show image, use placeholder if no avatar)
-               const profileImage = g.append("image")
-                 .attr("class", "profile-picture")
-                 .attr("x", parentX - 30)
-                 .attr("y", parentY - 65)
-                 .attr("width", 60)
-                 .attr("height", 60)
-                 .attr("href", parent.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPHN2ZyB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0xMiAxMmMyLjIxIDAgNC0xLjc5IDQtNHMtMS43OS00LTQtNC00IDEuNzktNCA0IDEuNzkgNCA0IDR6bTAgMmMtMi42NyAwLTggMS4zNC04IDR2MmgxNnYtMmMwLTIuNjYtNS4zMy00LTgtNHoiLz4KPC9zdmc+Cjwvc3ZnPgo=');
-               
-               // Add click handler for the profile picture
-               profileImage.on("click", function(event) {
-                 event.stopPropagation();
-                 showMemberDetails(parent);
-               });
-               
-               // Draw name (with more space for full name)
-               g.append("text")
-                 .attr("class", "name-text")
-                 .attr("x", parentX)
-                 .attr("y", parentY + 15)
-                 .text(parent.name.length > 20 ? parent.name.substring(0, 20) + '...' : parent.name);
-               
-               // Draw relationship
-               g.append("text")
-                 .attr("class", "relationship-text")
-                 .attr("x", parentX)
-                 .attr("y", parentY + 35)
-                 .text(parent.relationship);
-               
-               // Draw years
-               g.append("text")
-                 .attr("class", "year-text")
-                 .attr("x", parentX)
-                 .attr("y", parentY + 50)
-                 .text(parent.birthYear);
-               
-               // Draw unique ID
-               if (parent.joinId) {
-                 g.append("text")
-                   .attr("class", "id-text")
-                   .attr("x", parentX)
-                   .attr("y", parentY + 65)
-                   .text('ID: ' + parent.joinId.substring(0, 6));
-               }
-              });
-            }
-          
-          
-          
-                     // Create node groups (skip the family couple node since we draw parents manually)
-           const nodes = g.selectAll(".node")
-             .data(root.descendants().filter(d => d.data.id !== 'family-couple'))
-             .enter().append("g")
-             .attr("class", "node")
-             .attr("transform", d => \`translate(\${d.x}, \${d.y})\`)
-             .on("click", function(event, d) {
-               // Handle node selection
-               if (selectedNode) {
-                 selectedNode.select(".node-card").classed("selected", false);
-               }
-               selectedNode = d3.select(this);
-               selectedNode.select(".node-card").classed("selected", true);
-               
-               // Send message to React Native
-               window.ReactNativeWebView.postMessage(JSON.stringify({
-                 type: 'nodeSelected',
-                 nodeId: d.data.id
-               }));
-             });
+              // Send message to React Native
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'nodeSelected',
+                nodeId: d.data.id
+              }));
+            });
           
           // Draw node cards (wider for better visibility)
           nodes.append("rect")
@@ -1105,61 +895,61 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
             .attr("width", 160)
             .attr("height", 140);
           
-                                // Draw profile pictures (always show image, use placeholder if no avatar)
-            nodes.each(function(d) {
-              const node = d3.select(this);
-              const data = d.data;
-              
-                             const profileImage = node.append("image")
-                 .attr("class", "profile-picture")
-                 .attr("x", -30)
-                 .attr("y", -65)
-                 .attr("width", 60)
-                 .attr("height", 60)
-                 .attr("href", data.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPHN2ZyB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0xMiAxMmMyLjIxIDAgNC0xLjc5IDQtNHMtMS43OS00LTQtNC00IDEuNzktNCA0IDEuNzkgNCA0IDR6bTAgMmMtMi42NyAwLTggMS4zNC04IDR2MmgxNnYtMmMwLTIuNjYtNS4zMy00LTgtNHoiLz4KPC9zdmc+Cjwvc3ZnPgo=');
-              
-              // Add click handler for the profile picture
-              profileImage.on("click", function(event) {
-                event.stopPropagation();
-                showMemberDetails(data);
-              });
+          // Draw profile pictures (always show image, use placeholder if no avatar)
+          nodes.each(function(d) {
+            const node = d3.select(this);
+            const data = d.data;
+            
+            const profileImage = node.append("image")
+              .attr("class", "profile-picture")
+              .attr("x", -30)
+              .attr("y", -65)
+              .attr("width", 60)
+              .attr("height", 60)
+              .attr("href", data.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiM5Q0EzQUYiLz4KPHN2ZyB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0xMiAxMmMyLjIxIDAgNC0xLjc5IDQtNHMtMS43OS00LTQtNC00IDEuNzktNCA0IDEuNzkgNCA0IDR6bTAgMmMtMi42NyAwLTggMS4zNC04IDR2MmgxNnYtMmMwLTIuNjYtNS4zMy00LTgtNHoiLz4KPC9zdmc+Cjwvc3ZnPgo=');
+            
+            // Add click handler for the profile picture
+            profileImage.on("click", function(event) {
+              event.stopPropagation();
+              showMemberDetails(data);
+            });
+          });
+          
+          // Draw names (with more space for full name)
+          nodes.append("text")
+            .attr("class", "name-text")
+            .attr("y", 15)
+            .text(d => d.data.name.length > 20 ? d.data.name.substring(0, 20) + '...' : d.data.name);
+          
+          // Draw relationship
+          nodes.append("text")
+            .attr("class", "relationship-text")
+            .attr("y", 35)
+            .text(d => d.data.relationship || '');
+          
+          // Draw years
+          nodes.append("text")
+            .attr("class", "year-text")
+            .attr("y", 50)
+            .text(d => {
+              let text = d.data.birthYear;
+              if (d.data.isDeceased && d.data.deathYear) {
+                text += ' - ' + d.data.deathYear;
+              }
+              return text;
             });
           
-                                // Draw names (with more space for full name)
-           nodes.append("text")
-             .attr("class", "name-text")
-             .attr("y", 15)
-             .text(d => d.data.name.length > 20 ? d.data.name.substring(0, 20) + '...' : d.data.name);
-           
-           // Draw relationship
-           nodes.append("text")
-             .attr("class", "relationship-text")
-             .attr("y", 35)
-             .text(d => d.data.relationship || '');
-           
-           // Draw years
-           nodes.append("text")
-             .attr("class", "year-text")
-             .attr("y", 50)
-             .text(d => {
-               let text = d.data.birthYear;
-               if (d.data.isDeceased && d.data.deathYear) {
-                 text += ' - ' + d.data.deathYear;
-               }
-               return text;
-             });
-           
-           // Draw unique IDs
-           nodes.append("text")
-             .attr("class", "id-text")
-             .attr("y", 65)
-             .text(d => d.data.joinId ? 'ID: ' + d.data.joinId.substring(0, 6) : '');
-           
-           // Draw source family for linked members
-           nodes.append("text")
-             .attr("class", "source-family-text")
-             .attr("y", 80)
-             .text(d => d.data.isLinkedMember && d.data.sourceFamily ? \`From: \${d.data.sourceFamily}\` : '');
+          // Draw unique IDs
+          nodes.append("text")
+            .attr("class", "id-text")
+            .attr("y", 65)
+            .text(d => d.data.joinId ? 'ID: ' + d.data.joinId.substring(0, 6) : '');
+          
+          // Draw source family for linked members
+          nodes.append("text")
+            .attr("class", "source-family-text")
+            .attr("y", 80)
+            .text(d => d.data.isLinkedMember && d.data.sourceFamily ? \`From: \${d.data.sourceFamily}\` : '');
           
           // Zoom functions
           function zoomIn() {

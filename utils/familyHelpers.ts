@@ -1,11 +1,11 @@
-import { RelationType, User, Relationship } from '@/types/family';
+import { RelationType, User, Relationship, FamilyMember } from '@/types/family';
 
 export const getRelationshipDisplayName = (relationType: RelationType): string => {
   const relationshipMap: Record<RelationType, string> = {
     father: 'Father',
     mother: 'Mother',
     husband: 'Husband', 
-    wife: 'Wife',
+    wife: 'Wife', 
     son: 'Son',
     daughter: 'Daughter',
     brother: 'Brother',
@@ -38,6 +38,179 @@ export const getRelationshipCategory = (relationType: RelationType): string => {
   };
   
   return categoryMap[relationType] || 'other';
+};
+
+// New helper functions for the enhanced family tree structure
+
+/**
+ * Get display name for a family member
+ */
+export const getMemberDisplayName = (member: FamilyMember): string => {
+  if (member.fullName) return member.fullName;
+  if (member.firstName || member.lastName) {
+    return `${member.firstName || ''} ${member.lastName || ''}`.trim();
+  }
+  return member.relationship;
+};
+
+/**
+ * Determine gender based on relationship and member data
+ */
+export const getMemberGender = (member: FamilyMember): 'male' | 'female' => {
+  const relationship = member.relationship.toLowerCase();
+  if (relationship.includes('father') || 
+      relationship.includes('brother') || 
+      relationship.includes('son') ||
+      relationship.includes('husband')) {
+    return 'male';
+  }
+  return 'female';
+};
+
+/**
+ * Group children by their mother
+ */
+export const groupChildrenByMother = (members: FamilyMember[]): Map<string, FamilyMember[]> => {
+  const childrenByMother = new Map<string, FamilyMember[]>();
+  
+  // Find all mothers
+  const mothers = members.filter(member => 
+    member.parentType === 'mother' || 
+    member.relationship.toLowerCase().includes('mother') ||
+    member.relationship.toLowerCase().includes('wife')
+  );
+  
+  // Initialize mothers with empty children arrays
+  mothers.forEach(mother => {
+    childrenByMother.set(mother.id, []);
+  });
+  
+  // Find all children
+  const children = members.filter(member => 
+    member.parentType === 'child' ||
+    member.relationship.toLowerCase().includes('son') ||
+    member.relationship.toLowerCase().includes('daughter') ||
+    member.relationship.toLowerCase().includes('child') ||
+    member.relationship.toLowerCase().includes('brother') ||
+    member.relationship.toLowerCase().includes('sister')
+  );
+  
+  // Assign children to their mothers
+  children.forEach(child => {
+    if (child.motherId && childrenByMother.has(child.motherId)) {
+      childrenByMother.get(child.motherId)!.push(child);
+    } else {
+      // If child has no motherId or mother not found, assign to first mother
+      if (mothers.length > 0) {
+        const firstMotherId = mothers[0].id;
+        if (!childrenByMother.has(firstMotherId)) {
+          childrenByMother.set(firstMotherId, []);
+        }
+        childrenByMother.get(firstMotherId)!.push(child);
+      }
+    }
+  });
+  
+  return childrenByMother;
+};
+
+/**
+ * Validate mother-child relationships
+ */
+export const validateMotherChildRelationship = (
+  mother: FamilyMember, 
+  child: FamilyMember
+): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  // Check if mother is actually a mother/wife
+  const motherRelationship = mother.relationship.toLowerCase();
+  if (!motherRelationship.includes('mother') && !motherRelationship.includes('wife')) {
+    errors.push('Mother must have mother or wife relationship');
+  }
+  
+  // Check if child is actually a child
+  const childRelationship = child.relationship.toLowerCase();
+  if (!childRelationship.includes('son') && 
+      !childRelationship.includes('daughter') && 
+      !childRelationship.includes('child') &&
+      !childRelationship.includes('brother') &&
+      !childRelationship.includes('sister')) {
+    errors.push('Child must have child, son, daughter, brother, or sister relationship');
+  }
+  
+  // Check age logic (mother should be older than child)
+  const motherBirthYear = parseInt(mother.birthYear);
+  const childBirthYear = parseInt(child.birthYear);
+  if (!isNaN(motherBirthYear) && !isNaN(childBirthYear)) {
+    if (motherBirthYear >= childBirthYear) {
+      errors.push('Mother should be older than child');
+    }
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
+/**
+ * Calculate optimal spacing for tree layout
+ */
+export const calculateTreeSpacing = (
+  motherCount: number, 
+  containerWidth: number,
+  minSpacing: number = 200,
+  maxSpacing: number = 400
+): number => {
+  const totalWidth = Math.max(containerWidth, motherCount * minSpacing);
+  return Math.max(minSpacing, Math.min(maxSpacing, totalWidth / (motherCount + 1)));
+};
+
+/**
+ * Calculate child spacing under a mother
+ */
+export const calculateChildSpacing = (
+  childCount: number,
+  motherSpacing: number,
+  maxChildSpacing: number = 150
+): number => {
+  return Math.min(maxChildSpacing, motherSpacing / 2);
+};
+
+/**
+ * Get the father from family members
+ */
+export const getFather = (members: FamilyMember[]): FamilyMember | null => {
+  return members.find(member => 
+    member.parentType === 'father' || 
+    member.relationship.toLowerCase().includes('father')
+  ) || null;
+};
+
+/**
+ * Get all mothers/wives from family members
+ */
+export const getMothers = (members: FamilyMember[]): FamilyMember[] => {
+  return members.filter(member => 
+    member.parentType === 'mother' || 
+    member.relationship.toLowerCase().includes('mother') ||
+    member.relationship.toLowerCase().includes('wife')
+  );
+};
+
+/**
+ * Get all children from family members
+ */
+export const getChildren = (members: FamilyMember[]): FamilyMember[] => {
+  return members.filter(member => 
+    member.parentType === 'child' ||
+    member.relationship.toLowerCase().includes('son') ||
+    member.relationship.toLowerCase().includes('daughter') ||
+    member.relationship.toLowerCase().includes('child') ||
+    member.relationship.toLowerCase().includes('brother') ||
+    member.relationship.toLowerCase().includes('sister')
+  );
 };
 
 export const validateIdNumber = (idNumber: string, idType: 'NIN' | 'BVN'): boolean => {
