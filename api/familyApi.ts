@@ -124,7 +124,6 @@ export interface SetupParentsRequest {
     birthYear: string;
     isDeceased: boolean;
     deathYear?: string;
-    avatar?: File;
   };
   mothers: Array<{
     firstName: string;
@@ -132,7 +131,6 @@ export interface SetupParentsRequest {
     birthYear: string;
     isDeceased: boolean;
     deathYear?: string;
-    avatar?: File;
     spouseOrder: number;
   }>;
 }
@@ -433,27 +431,61 @@ class FamilyApi {
     family: {
       id: string;
       name: string;
-      father: FamilyMember;
-      mothers: FamilyMember[];
-      branches: Array<{
-        id: string;
-        name: string;
-        order: number;
-      }>;
+      creationType: string;
+      currentStep: string;
     };
+    father: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      birthYear: string;
+      isDeceased: boolean;
+    };
+    mothers: Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      birthYear: string;
+      isDeceased: boolean;
+      spouseOrder: number;
+    }>;
+    branches: Array<{
+      id: string;
+      name: string;
+      order: number;
+    }>;
   }>> {
     try {
+      console.log('Setup parents request:', {
+        url: `${this.baseUrl}/${familyId}/setup-parents`,
+        data: data,
+        token: token ? token.substring(0, 20) + '...' : 'null'
+      });
+
       const response = await fetch(`${this.baseUrl}/${familyId}/setup-parents`, {
         method: 'POST',
         headers: this.getAuthHeaders(token),
         body: JSON.stringify(data),
       });
 
+      console.log('Setup parents response status:', response.status);
+      console.log('Setup parents response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        console.error('Setup parents HTTP error:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Setup parents error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const result = await response.json();
       console.log('Setup parents response:', result);
       return result;
     } catch (error) {
       console.error('Setup parents error:', error);
+      if (error instanceof TypeError && error.message.includes('Network request failed')) {
+        throw new Error('Network connection failed. Please check your internet connection and try again.');
+      }
       throw error;
     }
   }

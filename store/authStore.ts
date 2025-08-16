@@ -161,15 +161,19 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         set({ isLoading: true, error: null });
         
         try {
+          console.log('Registration request data:', data);
           const response: AuthResponse = await authApi.register(data);
+          console.log('Registration response:', response);
           
           if (response.success) {
+            console.log('Registration successful:', response.data);
             set({ 
               isLoading: false,
               error: null 
             });
             return { success: true, message: response.message };
           } else {
+            console.log('Registration failed:', response.message);
             set({ 
               isLoading: false, 
               error: response.message || 'Registration failed' 

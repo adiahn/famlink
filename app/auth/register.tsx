@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform,
+  Dimensions, StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import Card from '../../components/ui/Card';
 import { Colors } from '../../constants/Colors';
-import { Eye, EyeOff, UserPlus, ArrowLeft, User, Mail, Phone, Calendar, Lock, Shield } from 'lucide-react-native';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react-native';
+
+const { width, height } = Dimensions.get('window');
 
 export default function RegisterScreen() {
   const { register, signIn, isLoading, error, clearError } = useAuthStore();
@@ -45,6 +47,12 @@ export default function RegisterScreen() {
       Alert.alert('Error', 'Date of birth is required');
       return false;
     }
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(formData.dateOfBirth)) {
+      Alert.alert('Error', 'Date of birth must be in YYYY-MM-DD format (e.g., 1990-01-01)');
+      return false;
+    }
     if (formData.password.length < 6) {
       Alert.alert('Error', 'Password must be at least 6 characters long');
       return false;
@@ -56,36 +64,26 @@ export default function RegisterScreen() {
     return true;
   };
 
-  const handleSignIn = async () => {
-    if (!validateForm()) return;
-    
-    clearError();
-    const result = await signIn({
-      phone: formData.phone,
-      password: formData.password,
-    });
-    
-    if (result.success) {
-      router.replace('/(tabs)');
-    } else {
-      Alert.alert('Sign In Failed', result.message);
-    }
+  const handleSignIn = () => {
+    router.push('/auth/login');
   };
 
   const handleSignUp = async () => {
     if (!validateForm()) return;
     
     clearError();
+    console.log('Attempting registration with data:', formData);
     const result = await register(formData);
+    console.log('Registration result:', result);
     
     if (result.success) {
       Alert.alert(
         'Registration Successful',
-        'Your account has been created successfully! Now let\'s set up your family.',
+        'Your account has been created successfully! Please sign in to continue.',
         [
           {
-            text: 'Continue',
-            onPress: () => router.push('/auth/onboarding'),
+            text: 'Sign In',
+            onPress: () => router.replace('/auth/login'),
           },
         ]
       );
@@ -103,173 +101,153 @@ export default function RegisterScreen() {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Button
-            title=""
-            variant="ghost"
-            onPress={() => router.back()}
-            style={styles.backButton}
-            leftIcon={<ArrowLeft size={24} color={Colors.primary[600]} />}
-          />
-        </View>
-
-        <View style={styles.content}>
-          <View style={styles.logoContainer}>
-            <UserPlus size={48} color={Colors.primary[600]} />
-            <Text style={styles.logoText}>Create Account</Text>
-            <Text style={styles.tagline}>Join your family network</Text>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Centered Content */}
+        <View style={styles.mainContainer}>
+          {/* Title */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Sign Up</Text>
           </View>
 
-          <Card style={styles.formCard}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Personal Information</Text>
+          {/* Form */}
+          <View style={styles.form}>
+            {/* Name Row */}
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 12 }]}>
+                <Text style={styles.label}>First Name</Text>
+                <Input
+                  value={formData.firstName}
+                  onChangeText={(value) => updateFormData('firstName', value)}
+                  placeholder="First name"
+                  autoCapitalize="words"
+                  style={styles.input}
+                />
+              </View>
               
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>First Name</Text>
-                                     <Input
-                     value={formData.firstName}
-                     onChangeText={(value) => updateFormData('firstName', value)}
-                     placeholder="Enter first name"
-                     autoCapitalize="words"
-                     leftIcon={<User size={16} color={Colors.neutral[500]} />}
-                   />
-                </View>
-                
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.label}>Last Name</Text>
-                  <Input
-                    value={formData.lastName}
-                    onChangeText={(value) => updateFormData('lastName', value)}
-                    placeholder="Enter last name"
-                    autoCapitalize="words"
-                    leftIcon={<User size={16} color={Colors.gray} />}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Phone Number</Text>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                <Text style={styles.label}>Last Name</Text>
                 <Input
-                  value={formData.phone}
-                  onChangeText={(value) => updateFormData('phone', value)}
-                  placeholder="Enter phone number"
-                  keyboardType="phone-pad"
-                  leftIcon={<Phone size={16} color={Colors.gray} />}
+                  value={formData.lastName}
+                  onChangeText={(value) => updateFormData('lastName', value)}
+                  placeholder="Last name"
+                  autoCapitalize="words"
+                  style={styles.input}
                 />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email Address</Text>
-                <Input
-                  value={formData.email}
-                  onChangeText={(value) => updateFormData('email', value)}
-                  placeholder="Enter email address"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  leftIcon={<Mail size={16} color={Colors.gray} />}
-                />
-              </View>
-
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>Date of Birth</Text>
-                  <Input
-                    value={formData.dateOfBirth}
-                    onChangeText={(value) => updateFormData('dateOfBirth', value)}
-                    placeholder="DD/MM/YYYY"
-                    leftIcon={<Calendar size={16} color={Colors.gray} />}
-                  />
-                </View>
-                
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.label}>Gender (Optional)</Text>
-                  <Input
-                    value={formData.gender}
-                    onChangeText={(value) => updateFormData('gender', value)}
-                    placeholder="Male/Female/Other"
-                    autoCapitalize="words"
-                  />
-                </View>
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Security</Text>
+            {/* Contact Row */}
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 12 }]}>
+                <Text style={styles.label}>Phone</Text>
+                <Input
+                  value={formData.phone}
+                  onChangeText={(value) => updateFormData('phone', value)}
+                  placeholder="Phone number"
+                  keyboardType="phone-pad"
+                  style={styles.input}
+                />
+              </View>
               
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.passwordContainer}>
-                  <Input
-                    value={formData.password}
-                    onChangeText={(value) => updateFormData('password', value)}
-                    placeholder="Create a password"
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    leftIcon={<Lock size={16} color={Colors.gray} />}
-                    style={styles.passwordInput}
-                  />
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                <Text style={styles.label}>Email</Text>
+                <Input
+                  value={formData.email}
+                  onChangeText={(value) => updateFormData('email', value)}
+                  placeholder="Email address"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={styles.input}
+                />
+              </View>
+            </View>
+
+            {/* Date & Gender Row */}
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 12 }]}>
+                <Text style={styles.label}>Date of Birth</Text>
+                <Input
+                  value={formData.dateOfBirth}
+                  onChangeText={(value) => updateFormData('dateOfBirth', value)}
+                  placeholder="YYYY-MM-DD"
+                  style={styles.input}
+                />
+              </View>
+              
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                <Text style={styles.label}>Gender</Text>
+                <Input
+                  value={formData.gender}
+                  onChangeText={(value) => updateFormData('gender', value)}
+                  placeholder="Gender"
+                  autoCapitalize="words"
+                  style={styles.input}
+                />
+              </View>
+            </View>
+
+            {/* Password */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password</Text>
+              <Input
+                value={formData.password}
+                onChangeText={(value) => updateFormData('password', value)}
+                placeholder="Password"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+                rightIcon={
                   <Button
                     title=""
                     variant="ghost"
                     onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeButton}
                     leftIcon={
                       showPassword ? (
-                        <EyeOff size={16} color={Colors.gray} />
+                        <EyeOff size={16} color={Colors.neutral[400]} />
                       ) : (
-                        <Eye size={16} color={Colors.gray} />
+                        <Eye size={16} color={Colors.neutral[400]} />
                       )
                     }
                   />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Confirm Password</Text>
-                <View style={styles.passwordContainer}>
-                  <Input
-                    value={formData.confirmPassword}
-                    onChangeText={(value) => updateFormData('confirmPassword', value)}
-                    placeholder="Confirm your password"
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    leftIcon={<Shield size={16} color={Colors.neutral[500]} />}
-                    style={styles.passwordInput}
-                  />
-                </View>
-              </View>
+                }
+              />
             </View>
 
+            {/* Confirm Password */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Confirm Password</Text>
+              <Input
+                value={formData.confirmPassword}
+                onChangeText={(value) => updateFormData('confirmPassword', value)}
+                placeholder="Confirm password"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+              />
+            </View>
+
+            {/* Buttons */}
             <View style={styles.buttonContainer}>
               <Button
                 title="Create Account"
                 onPress={handleSignUp}
                 disabled={isLoading}
-                style={styles.signUpButton}
-                leftIcon={<UserPlus size={20} color="#ffffff" />}
+                style={styles.primaryButton}
               />
               
               <Button
-                title="Sign In Instead"
+                title="Already have an account? Sign In"
                 variant="outline"
                 onPress={handleSignIn}
                 disabled={isLoading}
-                style={styles.signInButton}
+                style={styles.secondaryButton}
               />
             </View>
-          </Card>
-
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>🔒 Your Privacy Matters</Text>
-            <Text style={styles.infoText}>
-              We protect your personal information and never share it with third parties. 
-              Your family tree data is private and secure.
-            </Text>
           </View>
         </View>
       </ScrollView>
@@ -285,94 +263,59 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-  },
-  content: {
+  mainContainer: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-  },
-  logoContainer: {
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
+    paddingHorizontal: 24,
   },
-  logoText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.primary[600],
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 16,
-    color: Colors.neutral[500],
-    textAlign: 'center',
-  },
-  formCard: {
+  titleContainer: {
     marginBottom: 24,
   },
-  section: {
-    marginBottom: 24,
+  title: {
+    fontSize: 24,
+    fontWeight: '400',
+    color: Colors.text.primary,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.dark,
-    marginBottom: 16,
+  form: {
+    width: '100%',
+    gap: 16,
   },
   row: {
     flexDirection: 'row',
+    gap: 12,
   },
   inputGroup: {
-    marginBottom: 16,
+    flex: 1,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.dark,
-    marginBottom: 8,
+    fontWeight: '400',
+    color: Colors.text.primary,
+    marginBottom: 6,
   },
-  passwordContainer: {
-    position: 'relative',
-  },
-  passwordInput: {
-    paddingRight: 50,
-  },
-  eyeButton: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    padding: 0,
+  input: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: Colors.neutral[300],
+    borderRadius: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Colors.text.primary,
   },
   buttonContainer: {
     gap: 12,
-  },
-  signUpButton: {
     marginTop: 8,
   },
-  signInButton: {
-    marginTop: 8,
+  primaryButton: {
+    backgroundColor: Colors.text.primary,
+    borderRadius: 0,
+    paddingVertical: 16,
   },
-  infoBox: {
-    backgroundColor: Colors.lightGray,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.dark,
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.gray,
-    lineHeight: 20,
+  secondaryButton: {
+    borderColor: Colors.neutral[300],
+    borderRadius: 0,
+    paddingVertical: 16,
   },
 });

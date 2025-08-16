@@ -385,7 +385,7 @@ export default function TreeScreen() {
     );
   }
 
-  // If family exists but has no members, show a different message
+  // If family exists but has no members, continue with parent setup
   if (family && (!family.members || family.members.length === 0)) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -395,199 +395,14 @@ export default function TreeScreen() {
         
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Family Created Successfully!</Text>
-          <Text style={styles.debugText}>Your family "{family.name}" has been created. Add your first family member to get started.</Text>
+          <Text style={styles.debugText}>Your family "{family.name}" has been created. Now let's add your parents to get started.</Text>
           <Button
-            title="Add First Member"
-            onPress={() => setShowAddModal(true)}
-            fullWidth
-            style={styles.createButton}
-          />
-          <Button
-            title="Restart Family Creation"
+            title="Continue with Parent Setup"
             onPress={() => setShowFamilyCreationFlow(true)}
-            variant="outline"
             fullWidth
             style={styles.createButton}
           />
         </View>
-        
-        {/* Add Member Modal */}
-        <Modal
-          visible={showAddModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Family Member</Text>
-              <Pressable style={styles.closeButton} onPress={() => setShowAddModal(false)}>
-                <X size={24} color={Colors.text} />
-              </Pressable>
-            </View>
-            
-            <View style={styles.modalContent}>
-              <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
-              >
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {/* Avatar Section */}
-                  <View style={styles.avatarSection}>
-                    <View style={styles.avatarContainer}>
-                      <Pressable style={styles.avatarButton} onPress={handleTakePicture}>
-                        {formData.avatar ? (
-                          <Image source={{ uri: formData.avatar }} style={styles.selectedAvatar} />
-                        ) : (
-                          <View style={styles.avatarPlaceholder}>
-                            <Camera size={32} color="#94a3b8" />
-                            <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
-                          </View>
-                        )}
-                      </Pressable>
-                      {!formData.avatar && (
-                        <View style={styles.avatarOverlay}>
-                          <Text style={styles.avatarOverlayText}>Tap to upload</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={styles.avatarLabel}>Profile picture (optional)</Text>
-                  </View>
-
-                  {/* Form Fields */}
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>First Name *</Text>
-                    <Input
-                      value={formData.firstName}
-                      onChangeText={(text) => setFormData({ ...formData, firstName: text })}
-                      placeholder="Enter first name"
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Last Name *</Text>
-                    <Input
-                      value={formData.lastName}
-                      onChangeText={(text) => setFormData({ ...formData, lastName: text })}
-                      placeholder="Enter last name"
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Relationship *</Text>
-                    <Input
-                      value={formData.relationship}
-                      onChangeText={(text) => setFormData({ ...formData, relationship: text })}
-                      placeholder="e.g., Father, Mother, Brother, Sister"
-                    />
-                    
-                    {/* Quick relationship buttons */}
-                    <View style={styles.quickRelationships}>
-                      <Text style={styles.quickRelationshipsLabel}>Quick select:</Text>
-                      <View style={styles.relationshipButtons}>
-                        {['Father', 'Mother', 'Brother', 'Sister', 'Son', 'Daughter', 'Wife'].map((rel) => (
-                          <Pressable
-                            key={rel}
-                            style={[
-                              styles.relationshipButton,
-                              formData.relationship === rel && styles.relationshipButtonActive
-                            ]}
-                            onPress={() => setFormData({ ...formData, relationship: rel })}
-                          >
-                            <Text style={[
-                              styles.relationshipButtonText,
-                              formData.relationship === rel && styles.relationshipButtonTextActive
-                            ]}>
-                              {rel}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Birth Year *</Text>
-                    <Input
-                      value={formData.birthYear}
-                      onChangeText={(text) => {
-                        const numericText = text.replace(/[^0-9]/g, '');
-                        if (numericText.length <= 4) {
-                          setFormData({ ...formData, birthYear: numericText });
-                        }
-                      }}
-                      placeholder="e.g., 1990"
-                      keyboardType="numeric"
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Deceased</Text>
-                    <View style={styles.deceasedContainer}>
-                      <Pressable 
-                        style={[
-                          styles.deceasedButton,
-                          !formData.isDeceased && styles.deceasedButtonActive
-                        ]}
-                        onPress={() => setFormData({ ...formData, isDeceased: false })}
-                      >
-                        <Text style={[
-                          styles.deceasedButtonText,
-                          !formData.isDeceased && styles.deceasedButtonTextActive
-                        ]}>
-                          No
-                        </Text>
-                      </Pressable>
-                      <Pressable 
-                        style={[
-                          styles.deceasedButton,
-                          formData.isDeceased && styles.deceasedButtonActive
-                        ]}
-                        onPress={() => setFormData({ ...formData, isDeceased: true })}
-                      >
-                        <Text style={[
-                          styles.deceasedButtonText,
-                          formData.isDeceased && styles.deceasedButtonTextActive
-                        ]}>
-                          Yes
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-
-                  {formData.isDeceased && (
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Death Year *</Text>
-                      <Input
-                        value={formData.deathYear}
-                        onChangeText={(text) => {
-                          const numericText = text.replace(/[^0-9]/g, '');
-                          if (numericText.length <= 4) {
-                            setFormData({ ...formData, deathYear: numericText });
-                          }
-                        }}
-                        placeholder="e.g., 2020"
-                        keyboardType="numeric"
-                      />
-                    </View>
-                  )}
-                </ScrollView>
-              </KeyboardAvoidingView>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <Button
-                onPress={handleAddMember}
-                style={styles.saveButton}
-                disabled={isLoading}
-              >
-                <Save size={20} color={Colors.text.white} style={styles.buttonIcon} />
-                <Text style={styles.saveButtonText}>
-                  {isLoading ? 'Adding...' : 'Add Member'}
-                </Text>
-              </Button>
-            </View>
-          </View>
-        </Modal>
         
         {/* Family Creation Flow Modal */}
         <FamilyCreationFlow
@@ -597,6 +412,9 @@ export default function TreeScreen() {
             setShowFamilyCreationFlow(false);
             loadFamilyData(); // Reload family data after creation
           }}
+          initialStep="parent-setup"
+          initialFamilyId={family?.id}
+          initialFamilyName={family?.name}
           onInitializeFamily={async (type, familyName) => {
             try {
               if (!accessToken) {
@@ -623,6 +441,102 @@ export default function TreeScreen() {
             }
           }}
         />
+        
+        {/* Add Member Modal */}
+        <Modal
+          visible={showAddModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowAddModal(false)}
+        >
+          <SafeAreaView style={styles.modalContainer} edges={['top']}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Family Member</Text>
+              <Pressable
+                style={styles.closeButton}
+                onPress={() => setShowAddModal(false)}
+              >
+                <X size={24} color={Colors.text.primary} />
+              </Pressable>
+            </View>
+            
+            <ScrollView style={styles.modalContent}>
+              <Card style={styles.formCard}>
+                <View style={styles.formRow}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>First Name *</Text>
+                    <Input
+                      value={formData.firstName}
+                      onChangeText={(value) => setFormData({ ...formData, firstName: value })}
+                      placeholder="Enter first name"
+                      autoCapitalize="words"
+                    />
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Last Name *</Text>
+                    <Input
+                      value={formData.lastName}
+                      onChangeText={(value) => setFormData({ ...formData, lastName: value })}
+                      placeholder="Enter last name"
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Relationship *</Text>
+                  <Input
+                    value={formData.relationship}
+                    onChangeText={(value) => setFormData({ ...formData, relationship: value })}
+                    placeholder="e.g., Father, Mother, Wife, Son, Daughter"
+                    autoCapitalize="words"
+                  />
+                </View>
+
+                <View style={styles.formRow}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Birth Year *</Text>
+                    <Input
+                      value={formData.birthYear}
+                      onChangeText={(value) => setFormData({ ...formData, birthYear: value })}
+                      placeholder="YYYY"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Death Year</Text>
+                    <Input
+                      value={formData.deathYear}
+                      onChangeText={(value) => setFormData({ ...formData, deathYear: value })}
+                      placeholder="YYYY (if deceased)"
+                      keyboardType="numeric"
+                      editable={formData.isDeceased}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.switchRow}>
+                  <Text style={styles.label}>Deceased</Text>
+                  <Switch
+                    value={formData.isDeceased}
+                    onValueChange={(value) => setFormData({ ...formData, isDeceased: value })}
+                    trackColor={{ false: Colors.neutral[300], true: Colors.primary[600] }}
+                    thumbColor={formData.isDeceased ? Colors.text.white : Colors.text.white}
+                  />
+                </View>
+
+                <Button
+                  title="Add Member"
+                  onPress={handleAddMember}
+                  fullWidth
+                  style={styles.addButton}
+                />
+              </Card>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -1324,5 +1238,22 @@ const styles = StyleSheet.create({
   },
   createButton: {
     marginTop: 24,
+  },
+  formCard: {
+    padding: 20,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 15,
+    marginBottom: 20,
+  },
+  addButton: {
+    marginTop: 10,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
 });

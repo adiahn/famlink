@@ -813,7 +813,7 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
                
                mothers.forEach((mother, index) => {
                  mother.x = startX + index * spacing;
-                 mother.y = 400; // Increased gap from 300 to 400 (350px gap from father)
+                 mother.y = 500; // Increased gap from 400 to 500 (450px gap from father)
                  
                  // Position children horizontally under their respective mothers
                  if (mother.children && mother.children.length > 0) {
@@ -827,7 +827,7 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
                    
                    children.forEach((child, childIndex) => {
                      child.x = childStartX + childIndex * childSpacing;
-                     child.y = 700; // Much lower position for horizontal child layout (300px gap from mothers)
+                     child.y = 850; // Much lower position for horizontal child layout (350px gap from mothers)
                    });
                  }
                });

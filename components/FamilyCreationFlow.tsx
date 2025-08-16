@@ -9,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
@@ -31,6 +32,9 @@ interface FamilyCreationFlowProps {
   onComplete: (familyId: string) => void;
   onInitializeFamily: (type: CreationType, familyName?: string) => Promise<{ success: boolean; message: string; familyId?: string }>;
   onSetupParents: (familyId: string, fatherData: FatherData, mothersData: MotherData[]) => Promise<{ success: boolean; message: string }>;
+  initialStep?: FlowStep;
+  initialFamilyId?: string;
+  initialFamilyName?: string;
 }
 
 type FlowStep = 'type-selection' | 'family-name' | 'parent-setup' | 'completing';
@@ -41,12 +45,15 @@ export default function FamilyCreationFlow({
   onComplete,
   onInitializeFamily,
   onSetupParents,
+  initialStep = 'type-selection',
+  initialFamilyId,
+  initialFamilyName,
 }: FamilyCreationFlowProps) {
-  const [currentStep, setCurrentStep] = useState<FlowStep>('type-selection');
+  const [currentStep, setCurrentStep] = useState<FlowStep>(initialStep);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedType, setSelectedType] = useState<CreationType | null>(null);
-  const [familyName, setFamilyName] = useState('');
-  const [familyId, setFamilyId] = useState<string | null>(null);
+  const [familyName, setFamilyName] = useState(initialFamilyName ?? '');
+  const [familyId, setFamilyId] = useState<string | null>(initialFamilyId ?? null);
   
   // Parent setup form data
   const [fatherData, setFatherData] = useState<FatherData>({
@@ -115,9 +122,48 @@ export default function FamilyCreationFlow({
       return;
     }
     
+    // Validate death years if deceased
+    if (fatherData.isDeceased && !fatherData.deathYear) {
+      Alert.alert('Validation Error', 'Please enter the death year for the father.');
+      return;
+    }
+    
+    for (let i = 0; i < mothersData.length; i++) {
+      if (mothersData[i].isDeceased && !mothersData[i].deathYear) {
+        Alert.alert('Validation Error', `Please enter the death year for ${mothersData[i].spouseOrder === 1 ? 'mother' : `wife ${mothersData[i].spouseOrder}`}.`);
+        return;
+      }
+    }
+    
     setIsLoading(true);
     try {
+      // Prepare the request data exactly as the API expects - omit empty deathYear fields
+      const requestData = {
+        father: {
+          firstName: fatherData.firstName,
+          lastName: fatherData.lastName,
+          birthYear: fatherData.birthYear,
+          isDeceased: fatherData.isDeceased,
+          ...(fatherData.deathYear && fatherData.deathYear.trim() !== '' && { deathYear: fatherData.deathYear })
+        },
+        mothers: mothersData.map(mother => ({
+          firstName: mother.firstName,
+          lastName: mother.lastName,
+          birthYear: mother.birthYear,
+          isDeceased: mother.isDeceased,
+          spouseOrder: mother.spouseOrder,
+          ...(mother.deathYear && mother.deathYear.trim() !== '' && { deathYear: mother.deathYear })
+        }))
+      };
+      
+      console.log('Submitting parent setup with data:', {
+        familyId,
+        requestData
+      });
+      
       const result = await onSetupParents(familyId, fatherData, mothersData);
+      console.log('Parent setup result:', result);
+      
       if (result.success) {
         setCurrentStep('completing');
         setTimeout(() => {
@@ -125,10 +171,23 @@ export default function FamilyCreationFlow({
           handleClose();
         }, 1500);
       } else {
-        Alert.alert('Error', result.message || 'Failed to setup parents');
+        Alert.alert('Setup Failed', result.message || 'Failed to setup parents. Please try again.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to setup parents. Please try again.');
+      console.error('Parent setup error:', error);
+      let errorMessage = 'Failed to setup parents. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Network connection failed')) {
+          errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+        } else if (error.message.includes('HTTP')) {
+          errorMessage = `Server error: ${error.message}`;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Setup Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -172,7 +231,7 @@ export default function FamilyCreationFlow({
         </Text>
       </View>
       
-      <View style={styles.typeOptions}>
+      <View style={styles.typeOptionsContainer}>
         <Pressable
           style={[styles.typeOption, selectedType === 'parents_family' && styles.typeOptionSelected]}
           onPress={() => handleTypeSelection('parents_family')}
@@ -266,102 +325,218 @@ export default function FamilyCreationFlow({
         </Text>
       </View>
       
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.formScroll}>
         {/* Father Section */}
-        <Card variant="outlined" padding="medium" style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Father</Text>
-          <View style={styles.formRow}>
-            <Input
-              label="First Name"
-              placeholder="Father's first name"
-              value={fatherData.firstName}
-              onChangeText={(text) => setFatherData({ ...fatherData, firstName: text })}
-              style={styles.halfWidth}
-            />
-            <Input
-              label="Last Name"
-              placeholder="Father's last name"
-              value={fatherData.lastName}
-              onChangeText={(text) => setFatherData({ ...fatherData, lastName: text })}
-              style={styles.halfWidth}
-            />
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconContainer}>
+              <User size={24} color={Colors.primary[600]} />
+            </View>
+            <Text style={styles.sectionTitle}>Father</Text>
           </View>
-          <Input
-            label="Birth Year"
-            placeholder="e.g., 1960"
-            value={fatherData.birthYear}
-            onChangeText={(text) => {
-              const numericText = text.replace(/[^0-9]/g, '');
-              if (numericText.length <= 4) {
-                setFatherData({ ...fatherData, birthYear: numericText });
-              }
-            }}
-            keyboardType="numeric"
-          />
-        </Card>
+          
+          <View style={styles.formContainer}>
+            <View style={styles.formRow}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>First Name *</Text>
+                <View style={styles.inputContainer}>
+                  <Input
+                    value={fatherData.firstName}
+                    onChangeText={(text) => setFatherData({ ...fatherData, firstName: text })}
+                    placeholder="Enter first name"
+                    autoCapitalize="words"
+                    style={styles.modernInput}
+                  />
+                </View>
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Last Name *</Text>
+                <View style={styles.inputContainer}>
+                  <Input
+                    value={fatherData.lastName}
+                    onChangeText={(text) => setFatherData({ ...fatherData, lastName: text })}
+                    placeholder="Enter last name"
+                    autoCapitalize="words"
+                    style={styles.modernInput}
+                  />
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Birth Year *</Text>
+              <View style={styles.inputContainer}>
+                <Input
+                  value={fatherData.birthYear}
+                  onChangeText={(text) => {
+                    const numericText = text.replace(/[^0-9]/g, '');
+                    if (numericText.length <= 4) {
+                      setFatherData({ ...fatherData, birthYear: numericText });
+                    }
+                  }}
+                  placeholder="e.g., 1960"
+                  keyboardType="numeric"
+                  style={styles.modernInput}
+                />
+              </View>
+            </View>
+            
+            <View style={styles.switchContainer}>
+              <View style={styles.switchLabelContainer}>
+                <Text style={styles.switchLabel}>Deceased</Text>
+                <Text style={styles.switchSubtext}>Mark if father has passed away</Text>
+              </View>
+              <Switch
+                value={fatherData.isDeceased}
+                onValueChange={(value) => setFatherData({ ...fatherData, isDeceased: value })}
+                trackColor={{ false: Colors.neutral[200], true: Colors.primary[500] }}
+                thumbColor={fatherData.isDeceased ? Colors.text.white : Colors.text.white}
+                ios_backgroundColor={Colors.neutral[200]}
+              />
+            </View>
+            
+            {fatherData.isDeceased && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Death Year *</Text>
+                <View style={styles.inputContainer}>
+                  <Input
+                    value={fatherData.deathYear || ''}
+                    onChangeText={(text) => {
+                      const numericText = text.replace(/[^0-9]/g, '');
+                      if (numericText.length <= 4) {
+                        setFatherData({ ...fatherData, deathYear: numericText });
+                      }
+                    }}
+                    placeholder="e.g., 2020"
+                    keyboardType="numeric"
+                    style={styles.modernInput}
+                  />
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
         
         {/* Mothers Section */}
-        <Card variant="outlined" padding="medium" style={styles.sectionCard}>
+        <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconContainer}>
+              <User size={24} color={Colors.primary[600]} />
+            </View>
             <Text style={styles.sectionTitle}>Mother(s)</Text>
             <Button
               title="Add Mother"
               onPress={addMother}
               variant="outline"
               size="small"
-              leftIcon={<User size={16} color={Colors.primary[600]} />}
+              style={styles.addMotherButton}
             />
           </View>
           
           {mothersData.map((mother, index) => (
-            <View key={index} style={styles.motherSection}>
+            <View key={index} style={styles.motherContainer}>
               <View style={styles.motherHeader}>
-                <Text style={styles.motherTitle}>
-                  {mother.spouseOrder === 1 ? 'Mother' : `Wife ${mother.spouseOrder}`}
-                </Text>
-                {mothersData.length > 1 && (
-                  <Button
-                    title="Remove"
-                    onPress={() => removeMother(index)}
-                    variant="ghost"
-                    size="small"
-                    style={styles.removeButton}
+                <View style={styles.motherTitleContainer}>
+                  <Text style={styles.motherTitle}>
+                    {mother.spouseOrder === 1 ? 'Mother' : `Wife ${mother.spouseOrder}`}
+                  </Text>
+                  {mothersData.length > 1 && (
+                    <Button
+                      title="Remove"
+                      onPress={() => removeMother(index)}
+                      variant="ghost"
+                      size="small"
+                      style={styles.removeMotherButton}
+                    />
+                  )}
+                </View>
+              </View>
+              
+              <View style={styles.formContainer}>
+                <View style={styles.formRow}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>First Name *</Text>
+                    <View style={styles.inputContainer}>
+                      <Input
+                        value={mother.firstName}
+                        onChangeText={(text) => updateMother(index, 'firstName', text)}
+                        placeholder="Enter first name"
+                        autoCapitalize="words"
+                        style={styles.modernInput}
+                      />
+                    </View>
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Last Name *</Text>
+                    <View style={styles.inputContainer}>
+                      <Input
+                        value={mother.lastName}
+                        onChangeText={(text) => updateMother(index, 'lastName', text)}
+                        placeholder="Enter last name"
+                        autoCapitalize="words"
+                        style={styles.modernInput}
+                      />
+                    </View>
+                  </View>
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Birth Year *</Text>
+                  <View style={styles.inputContainer}>
+                    <Input
+                      value={mother.birthYear}
+                      onChangeText={(text) => {
+                        const numericText = text.replace(/[^0-9]/g, '');
+                        if (numericText.length <= 4) {
+                          updateMother(index, 'birthYear', numericText);
+                        }
+                      }}
+                      placeholder="e.g., 1965"
+                      keyboardType="numeric"
+                      style={styles.modernInput}
+                    />
+                  </View>
+                </View>
+                
+                <View style={styles.switchContainer}>
+                  <View style={styles.switchLabelContainer}>
+                    <Text style={styles.switchLabel}>Deceased</Text>
+                    <Text style={styles.switchSubtext}>Mark if mother has passed away</Text>
+                  </View>
+                  <Switch
+                    value={mother.isDeceased}
+                    onValueChange={(value) => updateMother(index, 'isDeceased', value)}
+                    trackColor={{ false: Colors.neutral[200], true: Colors.primary[500] }}
+                    thumbColor={mother.isDeceased ? Colors.text.white : Colors.text.white}
+                    ios_backgroundColor={Colors.neutral[200]}
                   />
+                </View>
+                
+                {mother.isDeceased && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Death Year *</Text>
+                    <View style={styles.inputContainer}>
+                      <Input
+                        value={mother.deathYear || ''}
+                        onChangeText={(text) => {
+                          const numericText = text.replace(/[^0-9]/g, '');
+                          if (numericText.length <= 4) {
+                            updateMother(index, 'deathYear', numericText);
+                          }
+                        }}
+                        placeholder="e.g., 2020"
+                        keyboardType="numeric"
+                        style={styles.modernInput}
+                      />
+                    </View>
+                  </View>
                 )}
               </View>
-              
-              <View style={styles.formRow}>
-                <Input
-                  label="First Name"
-                  placeholder="Mother's first name"
-                  value={mother.firstName}
-                  onChangeText={(text) => updateMother(index, 'firstName', text)}
-                  style={styles.halfWidth}
-                />
-                <Input
-                  label="Last Name"
-                  placeholder="Mother's last name"
-                  value={mother.lastName}
-                  onChangeText={(text) => updateMother(index, 'lastName', text)}
-                  style={styles.halfWidth}
-                />
-              </View>
-              
-              <Input
-                label="Birth Year"
-                placeholder="e.g., 1965"
-                value={mother.birthYear}
-                onChangeText={(text) => {
-                  const numericText = text.replace(/[^0-9]/g, '');
-                  if (numericText.length <= 4) {
-                    updateMother(index, 'birthYear', numericText);
-                  }
-                }}
-                keyboardType="numeric"
-              />
             </View>
           ))}
-        </Card>
+        </View>
       </ScrollView>
       
       <View style={styles.buttonGroup}>
@@ -376,6 +551,7 @@ export default function FamilyCreationFlow({
           onPress={handleParentSetup}
           loading={isLoading}
           fullWidth
+          style={styles.completeButton}
         />
       </View>
     </View>
@@ -439,15 +615,15 @@ export default function FamilyCreationFlow({
       animationType="slide"
       presentationStyle="pageSheet"
     >
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Create Family Tree</Text>
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Create Family Tree</Text>
           <Pressable style={styles.closeButton} onPress={handleClose}>
             <X size={24} color={Colors.text.primary} />
           </Pressable>
         </View>
         
-        <View style={styles.content}>
+        <View style={styles.modalContent}>
           {renderCurrentStep()}
         </View>
       </SafeAreaView>
@@ -456,51 +632,53 @@ export default function FamilyCreationFlow({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.text.white,
   },
-  header: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.neutral[200],
   },
-  title: {
+  modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: Colors.text.primary,
   },
   closeButton: {
     padding: 8,
   },
-  content: {
+  modalContent: {
     flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   stepContainer: {
     flex: 1,
-    padding: 20,
   },
   stepHeader: {
-    marginBottom: 32,
-    alignItems: 'center',
+    marginBottom: 24,
   },
   stepTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text.primary,
     marginBottom: 8,
-    textAlign: 'center',
   },
   stepDescription: {
     fontSize: 16,
     color: Colors.text.secondary,
-    textAlign: 'center',
     lineHeight: 24,
   },
-  typeOptions: {
+  typeSelectionContainer: {
+    marginBottom: 32,
+  },
+  typeOptionsContainer: {
     gap: 16,
     marginBottom: 32,
   },
@@ -508,7 +686,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: Colors.neutral[50],
+    backgroundColor: Colors.text.white,
     borderRadius: 16,
     borderWidth: 2,
     borderColor: Colors.neutral[200],
@@ -538,61 +716,29 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   continueButton: {
-    marginTop: 'auto',
+    backgroundColor: Colors.primary[600],
+    borderRadius: 12,
+    paddingVertical: 16,
+    shadowColor: Colors.primary[600],
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   buttonGroup: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 'auto',
+    marginTop: 24,
   },
   backButton: {
     flex: 1,
-  },
-  sectionCard: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  formRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  halfWidth: {
-    flex: 1,
-  },
-  motherSection: {
-    marginBottom: 24,
-    padding: 16,
-    backgroundColor: Colors.neutral[50],
+    backgroundColor: Colors.text.white,
+    borderColor: Colors.neutral[300],
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.neutral[200],
-  },
-  motherHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  motherTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
-  },
-  removeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 16,
   },
   completingContent: {
     flex: 1,
@@ -602,9 +748,9 @@ const styles = StyleSheet.create({
   },
   completingTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text.primary,
-    marginTop: 16,
+    marginTop: 24,
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -614,8 +760,138 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  placeholder: {
+  formScroll: {
+    flex: 1,
+    paddingHorizontal: 4,
+  },
+  sectionContainer: {
+    marginBottom: 32,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  sectionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  sectionTitle: {
     fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    flex: 1,
+  },
+  formContainer: {
+    backgroundColor: Colors.text.white,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: Colors.neutral[900],
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.neutral[100],
+  },
+  inputGroup: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 10,
+  },
+  modernInput: {
+    backgroundColor: Colors.text.white,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: Colors.text.primary,
+    borderWidth: 1.5,
+    borderColor: Colors.neutral[300],
+    minHeight: 56,
+  },
+  inputContainer: {
+    flex: 1,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingHorizontal: 4,
+  },
+  switchLabelContainer: {
+    flex: 1,
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.text.primary,
+  },
+  switchSubtext: {
+    fontSize: 12,
     color: Colors.text.secondary,
+    marginTop: 4,
+  },
+  addMotherButton: {
+    backgroundColor: Colors.primary[600],
+    borderColor: Colors.primary[600],
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  motherContainer: {
+    marginBottom: 24,
+  },
+  motherHeader: {
+    marginBottom: 16,
+  },
+  motherTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  motherTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  removeMotherButton: {
+    backgroundColor: Colors.error[50],
+    borderColor: Colors.error[200],
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  completeButton: {
+    flex: 2,
+    backgroundColor: Colors.primary[600],
+    borderRadius: 12,
+    paddingVertical: 16,
+    shadowColor: Colors.primary[600],
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
 });

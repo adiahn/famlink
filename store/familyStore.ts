@@ -509,7 +509,28 @@ export const useFamilyStore = create<FamilyState & FamilyActions>((set, get) => 
   setupParents: async (familyId, fatherData, mothersData, token) => {
     set({ isLoading: true, error: null });
     try {
-      const response: FamilyResponse = await familyApi.setupParents(familyId, { father: fatherData, mothers: mothersData }, token);
+      // Prepare the request data exactly as the API expects - omit empty deathYear fields
+      const requestData = {
+        father: {
+          firstName: fatherData.firstName,
+          lastName: fatherData.lastName,
+          birthYear: fatherData.birthYear,
+          isDeceased: fatherData.isDeceased,
+          ...(fatherData.deathYear && fatherData.deathYear.trim() !== '' && { deathYear: fatherData.deathYear })
+        },
+        mothers: mothersData.map(mother => ({
+          firstName: mother.firstName,
+          lastName: mother.lastName,
+          birthYear: mother.birthYear,
+          isDeceased: mother.isDeceased,
+          spouseOrder: mother.spouseOrder,
+          ...(mother.deathYear && mother.deathYear.trim() !== '' && { deathYear: mother.deathYear })
+        }))
+      };
+      
+      console.log('Store setupParents request data:', requestData);
+      
+      const response: FamilyResponse = await familyApi.setupParents(familyId, requestData, token);
       if (response.success) {
         set({ isLoading: false, error: null });
         return { success: true, message: response.message };
