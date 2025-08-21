@@ -601,6 +601,16 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
             padding: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             z-index: 1000;
+            max-width: 60px;
+            min-width: 60px;
+          }
+          
+          @media (min-width: 768px) {
+            .zoom-controls {
+              top: 30px;
+              right: 30px;
+              padding: 15px;
+            }
           }
           
           .zoom-btn {
@@ -626,6 +636,17 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
             bottom: 20px;
             right: 20px;
             z-index: 1000;
+            max-width: 200px;
+            min-width: 200px;
+          }
+          
+          @media (min-width: 768px) {
+            .add-member-controls {
+              bottom: 30px;
+              right: 30px;
+              max-width: 220px;
+              min-width: 220px;
+            }
           }
           
           .add-member-btn {
@@ -642,6 +663,10 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
             transition: all 0.3s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
           }
           
           .add-member-btn:hover {
@@ -802,28 +827,104 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
                const motherCount = mothers.length;
                
                // Calculate much wider spacing between mothers to prevent child overlap
-               const minSpacing = 800; // Significantly increased from 400 to 800
-               const maxSpacing = 1500; // Significantly increased from 600 to 1500
-               const totalWidth = Math.max(containerWidth, motherCount * minSpacing);
-               const spacing = Math.max(minSpacing, Math.min(maxSpacing, totalWidth / (motherCount + 1)));
+               const minSpacing = 1200; // Significantly increased to accommodate 7 children
+               const maxSpacing = 3000; // Increased maximum spacing for large families
+               
+               // Calculate required spacing based on actual children distribution
+               let maxChildrenPerMother = 0;
+               let totalChildren = 0;
+               mothers.forEach(mother => {
+                 const childCount = mother.children ? mother.children.length : 0;
+                 totalChildren += childCount;
+                 if (childCount > maxChildrenPerMother) {
+                   maxChildrenPerMother = childCount;
+                 }
+               });
+               
+               // Calculate spacing based on the mother with the most children
+               let spacing;
+               if (maxChildrenPerMother === 0) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1)));
+               } else if (maxChildrenPerMother === 1) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1)));
+               } else if (maxChildrenPerMother === 2) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1) * 1.3));
+               } else if (maxChildrenPerMother === 3) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1) * 1.6));
+               } else if (maxChildrenPerMother === 4) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1) * 2.0));
+               } else if (maxChildrenPerMother === 5) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1) * 2.4));
+               } else if (maxChildrenPerMother === 6) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1) * 2.8));
+               } else if (maxChildrenPerMother === 7) {
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1) * 3.2));
+               } else {
+                 // For 8+ children, use extremely wide spacing
+                 spacing = Math.max(minSpacing, Math.min(maxSpacing, containerWidth / (motherCount + 1) * 3.6));
+               }
                
                // Calculate the total width needed for all mothers
                const totalMotherWidth = (motherCount - 1) * spacing;
+               
+               // Ensure we have enough container width for all mothers
+               if (totalMotherWidth > containerWidth) {
+                 // If not enough space, increase spacing to minimum required
+                 spacing = Math.max(spacing, containerWidth / (motherCount - 1));
+               }
+               
                const startX = (containerWidth - totalMotherWidth) / 2; // Center the mothers
                
                mothers.forEach((mother, index) => {
                  mother.x = startX + index * spacing;
                  mother.y = 600; // Increased gap from 500 to 600 (550px gap from father)
                  
-                 // Position children horizontally under their respective mothers
+                 // Position children horizontally under their respective mothers with dynamic spacing
                  if (mother.children && mother.children.length > 0) {
                    const children = mother.children;
                    const childCount = children.length;
                    
-                   // Calculate child spacing for horizontal arrangement
-                   const childSpacing = 240; // Reduced by 40% from 400 to 240 for better child spacing
+                   // Dynamic child spacing calculation to prevent overlap
+                   const minChildSpacing = 180; // Reduced minimum for better fit
+                   const maxChildSpacing = 350; // Reduced maximum for consistency
+                   const childNodeWidth = 140; // Reduced node width estimate for more accurate calculation
+                   
+                   // Calculate optimal spacing based on number of children
+                   let childSpacing;
+                   if (childCount === 1) {
+                     childSpacing = 0; // Single child centered under mother
+                   } else if (childCount === 2) {
+                     childSpacing = Math.max(minChildSpacing, 280); // Good spacing for 2 children
+                   } else if (childCount === 3) {
+                     childSpacing = Math.max(minChildSpacing, 240); // Good spacing for 3 children
+                   } else if (childCount === 4) {
+                     childSpacing = Math.max(minChildSpacing, 200); // Good spacing for 4 children
+                   } else if (childCount === 5) {
+                     childSpacing = Math.max(minChildSpacing, 180); // Good spacing for 5 children
+                   } else if (childCount === 6) {
+                     childSpacing = Math.max(minChildSpacing, 160); // Good spacing for 6 children
+                   } else if (childCount === 7) {
+                     childSpacing = Math.max(minChildSpacing, 150); // Good spacing for 7 children
+                   } else {
+                     // For 8+ children, calculate spacing to fit within mother's allocated space
+                     const availableWidth = spacing * 0.75; // Use 75% of mother spacing for children
+                     const totalChildrenWidth = childCount * childNodeWidth;
+                     const requiredSpacing = (availableWidth - totalChildrenWidth) / (childCount - 1);
+                     childSpacing = Math.max(minChildSpacing, Math.min(maxChildSpacing, requiredSpacing));
+                   }
+                   
+                   // Calculate total width needed for all children
                    const totalChildWidth = (childCount - 1) * childSpacing;
-                   const childStartX = mother.x - totalChildWidth / 2; // Center children under mother
+                   
+                   // Safety check: ensure children don't exceed mother's allocated space
+                   const maxAllowedChildWidth = spacing * 0.85; // Use 85% of mother spacing for safety
+                   if (totalChildWidth > maxAllowedChildWidth) {
+                     // Recalculate child spacing to fit within allocated space
+                     const adjustedChildSpacing = maxAllowedChildWidth / (childCount - 1);
+                     childSpacing = Math.max(minChildSpacing, adjustedChildSpacing);
+                   }
+                   
+                   const childStartX = mother.x - (childCount - 1) * childSpacing / 2; // Center children under mother
                    
                    children.forEach((child, childIndex) => {
                      child.x = childStartX + childIndex * childSpacing;

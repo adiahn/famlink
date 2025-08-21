@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform,
-  Dimensions, StatusBar, Pressable, TextInput
+  Dimensions, StatusBar, Pressable, TextInput, TouchableWithoutFeedback, Keyboard
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
@@ -57,14 +57,15 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-      
-      <KeyboardAvoidingView 
-        style={styles.keyboardContainer} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.content}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        
+        <KeyboardAvoidingView 
+          style={styles.keyboardContainer} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
             <Pressable 
@@ -157,6 +158,7 @@ export default function LoginScreen() {
         </View>
       </KeyboardAvoidingView>
     </View>
+    </TouchableWithoutFeedback>
   );
 }
 

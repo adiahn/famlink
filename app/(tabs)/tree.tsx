@@ -134,23 +134,54 @@ export default function TreeScreen() {
         console.log('Available mothers loaded:', result.data.mothers);
         setAvailableMothers(result.data.mothers);
       } else {
-        console.log('No mothers available or API error');
-        setAvailableMothers([]);
+        console.log('No mothers from API, using family data as fallback');
+        // Fallback: use mothers from family data
+        const mothersFromFamily = family.members.filter(member => 
+          member.relationship.toLowerCase().includes('mother') ||
+          member.relationship.toLowerCase().includes('wife')
+        ).map(mother => ({
+          id: mother.id,
+          name: mother.firstName + ' ' + mother.lastName,
+          spouseOrder: mother.spouseOrder || 1,
+          branchName: mother.relationship,
+          childrenCount: 0
+        }));
+        console.log('Fallback mothers from family data:', mothersFromFamily);
+        setAvailableMothers(mothersFromFamily);
       }
     } catch (error) {
       console.error('Load available mothers error:', error);
-      setAvailableMothers([]);
+      // Fallback: use mothers from family data
+      const mothersFromFamily = family.members.filter(member => 
+        member.relationship.toLowerCase().includes('mother') ||
+        member.relationship.toLowerCase().includes('wife')
+      ).map(mother => ({
+        id: mother.id,
+        name: mother.firstName + ' ' + mother.lastName,
+        spouseOrder: mother.spouseOrder || 1,
+        branchName: mother.relationship,
+        childrenCount: 0
+      }));
+      console.log('Fallback mothers from family data (error case):', mothersFromFamily);
+      setAvailableMothers(mothersFromFamily);
     } finally {
       setIsLoadingMothers(false);
     }
   };
 
-  // Load mothers when relationship changes to Child
+  // Load mothers when relationship changes to Child or when modal opens
   useEffect(() => {
     if (formData.relationship === 'Child' && family?.id && accessToken) {
       loadAvailableMothers();
     }
   }, [formData.relationship, family?.id, accessToken]);
+
+  // Also load mothers when modal opens
+  useEffect(() => {
+    if (showAddModal && family?.id && accessToken) {
+      loadAvailableMothers();
+    }
+  }, [showAddModal, family?.id, accessToken]);
 
   const getSelectedMotherName = () => {
     if (!formData.motherId) return '';

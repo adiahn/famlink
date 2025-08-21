@@ -41,24 +41,7 @@ const getStatsData = (family: any) => {
   ];
 };
 
-const recentActivity = [
-  {
-    id: 1,
-    type: 'family_created',
-    message: 'Your family "The Johnson Family" was created successfully',
-    time: '2 hours ago',
-    icon: TreePine,
-    color: '#2563eb',
-  },
-  {
-    id: 2,
-    type: 'join_id_generated',
-    message: 'Your Join ID: JOHN001 is ready to share',
-    time: '2 hours ago',
-    icon: Copy,
-    color: '#059669',
-  },
-];
+
 
 export default function Home() {
   const { user, accessToken } = useAuthStore();
@@ -216,29 +199,7 @@ export default function Home() {
           </View>
         )}
 
-        {family && family.members.length > 0 && (
-          <View style={styles.activitySection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Activity</Text>
-              <Pressable>
-                <Text style={styles.seeAllText}>See All</Text>
-              </Pressable>
-            </View>
 
-            {recentActivity.map((activity) => (
-              <View key={activity.id} style={styles.activityItem}>
-                <View style={[styles.activityIcon, { backgroundColor: `${activity.color}15` }]}>
-                  <activity.icon size={20} color={activity.color} strokeWidth={2} />
-                </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityMessage}>{activity.message}</Text>
-                  <Text style={styles.activityTime}>{activity.time}</Text>
-                </View>
-                <ArrowRight size={16} color="#94a3b8" strokeWidth={2} />
-              </View>
-            ))}
-          </View>
-        )}
 
 
       </ScrollView>
