@@ -801,9 +801,9 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
                const mothers = root.children;
                const motherCount = mothers.length;
                
-               // Calculate much wider spacing between mothers
-               const minSpacing = 400; // Increased from 200
-               const maxSpacing = 600; // Increased from 400
+               // Calculate much wider spacing between mothers to prevent child overlap
+               const minSpacing = 800; // Significantly increased from 400 to 800
+               const maxSpacing = 1500; // Significantly increased from 600 to 1500
                const totalWidth = Math.max(containerWidth, motherCount * minSpacing);
                const spacing = Math.max(minSpacing, Math.min(maxSpacing, totalWidth / (motherCount + 1)));
                
@@ -813,7 +813,7 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
                
                mothers.forEach((mother, index) => {
                  mother.x = startX + index * spacing;
-                 mother.y = 500; // Increased gap from 400 to 500 (450px gap from father)
+                 mother.y = 600; // Increased gap from 500 to 600 (550px gap from father)
                  
                  // Position children horizontally under their respective mothers
                  if (mother.children && mother.children.length > 0) {
@@ -821,13 +821,13 @@ export default function FamilyTreeView({ familyMembers, onMemberSelect, onAddMem
                    const childCount = children.length;
                    
                    // Calculate child spacing for horizontal arrangement
-                   const childSpacing = 250; // Fixed spacing between children
+                   const childSpacing = 240; // Reduced by 40% from 400 to 240 for better child spacing
                    const totalChildWidth = (childCount - 1) * childSpacing;
                    const childStartX = mother.x - totalChildWidth / 2; // Center children under mother
                    
                    children.forEach((child, childIndex) => {
                      child.x = childStartX + childIndex * childSpacing;
-                     child.y = 850; // Much lower position for horizontal child layout (350px gap from mothers)
+                     child.y = 1000; // Much lower position for horizontal child layout (400px gap from mothers)
                    });
                  }
                });

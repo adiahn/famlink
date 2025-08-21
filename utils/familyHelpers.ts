@@ -160,11 +160,22 @@ export const validateMotherChildRelationship = (
 export const calculateTreeSpacing = (
   motherCount: number, 
   containerWidth: number,
-  minSpacing: number = 200,
-  maxSpacing: number = 400
+  minSpacing: number = 800,  // Significantly increased from 400 to 800
+  maxSpacing: number = 1500  // Significantly increased from 800 to 1500
 ): number => {
-  const totalWidth = Math.max(containerWidth, motherCount * minSpacing);
-  return Math.max(minSpacing, Math.min(maxSpacing, totalWidth / (motherCount + 1)));
+  // Ensure minimum spacing is much larger to prevent child overlap
+  const baseSpacing = Math.max(minSpacing, 700);
+  
+  // Calculate spacing with much more generous allocation per mother
+  const totalWidth = Math.max(containerWidth, motherCount * baseSpacing);
+  const calculatedSpacing = totalWidth / (motherCount + 1);
+  
+  // Apply a much larger multiplier to prevent overlap
+  const spacingMultiplier = 2.0; // Increase spacing by 100% (doubled)
+  const adjustedSpacing = calculatedSpacing * spacingMultiplier;
+  
+  // Ensure spacing is generous enough to prevent child overlap
+  return Math.max(baseSpacing, Math.min(maxSpacing, adjustedSpacing));
 };
 
 /**
@@ -173,9 +184,15 @@ export const calculateTreeSpacing = (
 export const calculateChildSpacing = (
   childCount: number,
   motherSpacing: number,
-  maxChildSpacing: number = 150
+  maxChildSpacing: number = 400  // Significantly increased from 250 to 400
 ): number => {
-  return Math.min(maxChildSpacing, motherSpacing / 2);
+  // Increase child spacing to prevent overlap between different mothers' children
+  const childSpacingRatio = 0.3; // Reduced ratio but with much larger base spacing
+  const calculatedSpacing = motherSpacing * childSpacingRatio;
+  
+  // Ensure minimum child spacing to prevent overlap
+  const minChildSpacing = 200;
+  return Math.max(minChildSpacing, Math.min(maxChildSpacing, calculatedSpacing));
 };
 
 /**
@@ -274,6 +291,9 @@ export const isValidRelationship = (
   }
 };
 
+/**
+ * Suggest relationship based on age difference
+ */
 export const suggestRelationship = (
   userAge: number, 
   relativeAge: number

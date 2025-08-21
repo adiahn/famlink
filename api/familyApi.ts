@@ -243,6 +243,12 @@ class FamilyApi {
         if (data.deathYear) {
           formData.append('deathYear', data.deathYear);
         }
+        if (data.motherId) {
+          formData.append('motherId', data.motherId);
+        }
+        if (data.parentType) {
+          formData.append('parentType', data.parentType);
+        }
         formData.append('avatar', data.avatar);
 
         console.log('Sending FormData for add member with avatar');
@@ -271,9 +277,13 @@ class FamilyApi {
           birthYear: data.birthYear,
           isDeceased: data.isDeceased,
           deathYear: data.deathYear,
+          ...(data.motherId && { motherId: data.motherId }),
+          ...(data.parentType && { parentType: data.parentType }),
         };
 
         console.log('Sending JSON data for add member:', jsonData);
+        console.log('Mother ID being sent:', data.motherId);
+        console.log('Parent Type being sent:', data.parentType);
 
         const response = await fetch(`${this.baseUrl}/${familyId}/members`, {
           method: 'POST',

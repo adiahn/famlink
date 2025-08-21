@@ -127,10 +127,14 @@ export default function TreeScreen() {
     
     setIsLoadingMothers(true);
     try {
+      console.log('Loading available mothers for family:', family.id);
       const result = await familyApi.getAvailableMothers(family.id, accessToken);
+      console.log('Available mothers API result:', result);
       if (result.success && result.data?.mothers) {
+        console.log('Available mothers loaded:', result.data.mothers);
         setAvailableMothers(result.data.mothers);
       } else {
+        console.log('No mothers available or API error');
         setAvailableMothers([]);
       }
     } catch (error) {
@@ -151,6 +155,9 @@ export default function TreeScreen() {
   const getSelectedMotherName = () => {
     if (!formData.motherId) return '';
     const mother = availableMothers.find(m => m.id === formData.motherId);
+    console.log('getSelectedMotherName - motherId:', formData.motherId);
+    console.log('getSelectedMotherName - availableMothers:', availableMothers);
+    console.log('getSelectedMotherName - found mother:', mother);
     return mother ? mother.name : '';
   };
 
@@ -247,6 +254,8 @@ export default function TreeScreen() {
     };
 
     console.log('Adding member with data:', requestData);
+    console.log('Form data motherId:', formData.motherId);
+    console.log('Request data motherId:', requestData.motherId);
 
     const result = await addMember(family.id, requestData, accessToken);
     
@@ -632,6 +641,8 @@ export default function TreeScreen() {
                                 onPress={() => {
                                   setFormData({ ...formData, motherId: mother.id });
                                   setShowMotherDropdown(false);
+                                  console.log('Mother selected - motherId:', mother.id);
+                                  console.log('Mother selected - mother name:', mother.name);
                                 }}
                               >
                                 <Text style={styles.dropdownOptionText}>{mother.name}</Text>
